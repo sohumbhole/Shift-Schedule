@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Home, Users, Settings, Flame, CalendarDays, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
-import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 const navItems = [
   { name: "Home", page: "Home", icon: Home },
@@ -14,6 +13,7 @@ const navItems = [
 
 export default function Layout({ children, currentPageName }) {
   const { logout } = useAuth();
+
   if (currentPageName === "Home") {
     return <>{children}</>;
   }
@@ -55,19 +55,16 @@ export default function Layout({ children, currentPageName }) {
                   </Link>
                 );
               })}
-              {isSupabaseConfigured() && (
-                <>
-                  <div className="w-px h-5 bg-gray-200 mx-1" />
-                  <button
-                    onClick={() => logout()}
-                    title="Sign out"
-                    className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span className="hidden sm:inline">Sign Out</span>
-                  </button>
-                </>
-              )}
+
+              {/* Sign Out button */}
+              <button
+                onClick={() => logout()}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 text-gray-500 hover:text-red-600 hover:bg-red-50 ml-1"
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
             </div>
           </div>
         </div>
