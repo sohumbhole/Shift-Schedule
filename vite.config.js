@@ -19,6 +19,7 @@ function printDevUrl() {
 }
 
 export default defineConfig({
+  base: '/',
   logLevel: 'error',
   plugins: [react(), printDevUrl()],
   resolve: {
