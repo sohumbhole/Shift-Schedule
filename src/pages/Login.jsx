@@ -36,8 +36,7 @@ export default function Login() {
         const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
 
-        // Check if user has been verified: check verification_tokens table has a used_at entry
-        // We ask the backend to check instead of relying on user_metadata which can be stale
+        // Check if user has been verified via the backend
         const verifyCheck = await fetch('/api/auth/check-verified', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
