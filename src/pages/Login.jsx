@@ -20,14 +20,28 @@ export default function Login() {
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
-        if (signUpError) throw signUpError;
+        const response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Signup failed');
+        
         setError(null);
         setPassword('');
         setError('Check your email to confirm your account, then sign in.');
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
+        
+        // Optional: Check if user is verified via metadata
+        if (user?.user_metadata?.verified === false) {
+           await supabase.auth.signOut();
+           throw new Error('Please verify your email address before signing in.');
+        }
+
         navigate('/', { replace: true });
         window.location.reload();
       }
@@ -87,13 +101,45 @@ export default function Login() {
           >
             {loading ? 'Please wait...' : isSignUp ? 'Sign up' : 'Sign in'}
           </Button>
-          <button
-            type="button"
-            onClick={() => { setIsSignUp((v) => !v); setError(null); }}
-            className="w-full text-sm text-gray-500 hover:text-gray-700"
-          >
-            {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
-          </button>
+          <div className="flex flex-col space-y-2">
+            <button
+              type="button"
+              onClick={() => { setIsSignUp((v) => !v); setError(null); }}
+              className="w-full text-sm text-gray-500 hover:text-gray-700"
+            >
+              {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
+            </button>
+            {!isSignUp && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!email) {
+                    setError('Please enter your email address first.');
+                    return;
+                  }
+                  setLoading(true);
+                  try {
+                    const response = await fetch('/api/auth/reset-password', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email }),
+                    });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || 'Failed to send reset link');
+                    setError(null);
+                    alert('Check your email for the password reset link.');
+                  } catch (err) {
+                    setError(err.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="w-full text-sm text-orange-500 hover:text-orange-600 font-medium"
+              >
+                Forgot password?
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>

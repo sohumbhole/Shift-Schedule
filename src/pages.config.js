@@ -51,6 +51,8 @@ import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Home from './pages/Home';
 import Settings from './pages/Settings';
+import VerifyEmail from './pages/VerifyEmail';
+import ResetPassword from './pages/ResetPassword';
 import __Layout from './Layout.jsx';
 
 
@@ -59,6 +61,8 @@ export const PAGES = {
     "Employees": Employees,
     "Home": Home,
     "Settings": Settings,
+    "verify-email": VerifyEmail,
+    "reset-password": ResetPassword,
 }
 
 export const pagesConfig = {
