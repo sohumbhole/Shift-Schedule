@@ -35,11 +35,19 @@ export default function Login() {
       } else {
         const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
-        
-        // Optional: Check if user is verified via metadata
-        if (user?.user_metadata?.verified === false) {
+
+        // Check if user has been verified: check verification_tokens table has a used_at entry
+        // We ask the backend to check instead of relying on user_metadata which can be stale
+        const verifyCheck = await fetch('/api/auth/check-verified', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        });
+        const verifyData = await verifyCheck.json();
+
+        if (!verifyData.verified) {
            await supabase.auth.signOut();
-           throw new Error('Please verify your email address before signing in.');
+           throw new Error('Please verify your email address before signing in. Check your inbox for the verification link.');
         }
 
         navigate('/', { replace: true });

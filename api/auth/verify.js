@@ -1,3 +1,7 @@
+/**
+ * /api/auth/verify
+ * Validates the email verification token and sets verified=true on the user account.
+ */
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -17,7 +21,7 @@ export default async function handler(req, res) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // 1. Check token
+    // 1. Find the token in the DB
     const { data: tokenData, error: tokenError } = await supabase
       .from('verification_tokens')
       .select('*')
@@ -26,26 +30,33 @@ export default async function handler(req, res) {
       .single();
 
     if (tokenError || !tokenData) {
-      return res.status(400).json({ error: 'Invalid or expired token' });
+      return res.status(400).json({ error: 'Invalid or already-used verification token.' });
     }
 
     if (new Date(tokenData.expires_at) < new Date()) {
-      return res.status(400).json({ error: 'Token expired' });
+      return res.status(400).json({ error: 'Verification token has expired. Please sign up again to get a new link.' });
     }
 
     // 2. Mark token as used
-    await supabase
+    const { error: updateTokenError } = await supabase
       .from('verification_tokens')
       .update({ used_at: new Date().toISOString() })
       .eq('id', tokenData.id);
 
-    // 3. Update user metadata to verified: true
-    const { error: updateError } = await supabase.auth.admin.updateUserById(
+    if (updateTokenError) throw updateTokenError;
+
+    // 3. Update the user's app_metadata to set verified=true
+    // Using app_metadata (not user_metadata) because app_metadata can only be 
+    // written by the service role — users can't tamper with it themselves.
+    const { error: updateUserError } = await supabase.auth.admin.updateUserById(
       tokenData.user_id,
-      { user_metadata: { verified: true } }
+      { app_metadata: { verified: true } }
     );
 
-    if (updateError) throw updateError;
+    if (updateUserError) {
+      console.error('Failed to update user metadata:', updateUserError);
+      throw updateUserError;
+    }
 
     return res.status(200).json({ message: 'Email verified successfully!' });
   } catch (error) {
