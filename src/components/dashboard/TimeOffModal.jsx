@@ -24,6 +24,7 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
   const [form, setForm] = useState({
     employee_id: "",
     date: "",
+    end_date: "",
     type: "regular_off",
     full_day: true,
     start_time: "00:00",
@@ -36,6 +37,7 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
       setForm({
         employee_id: editTimeOff.employee_id || "",
         date: editTimeOff.date || "",
+        end_date: editTimeOff.end_date || editTimeOff.date || "",
         type: editTimeOff.type || "regular_off",
         full_day: editTimeOff.full_day !== false,
         start_time: editTimeOff.start_time || "00:00",
@@ -47,6 +49,7 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
       setForm({
         employee_id: employee?.id || (employees?.[0]?.id || ""),
         date: date ? format(date, "yyyy-MM-dd") : "",
+        end_date: date ? format(date, "yyyy-MM-dd") : "",
         type: "regular_off",
         full_day: true,
         start_time: storeOpen,
@@ -132,14 +135,24 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
             </div>
           )}
 
-          {/* Date */}
-          <div className="space-y-2">
-            <Label>Date</Label>
-            <Input
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-            />
+          <div className="flex items-center gap-3">
+            <div className="flex-1 space-y-2">
+              <Label>Start Date</Label>
+              <Input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value, end_date: form.end_date < e.target.value ? e.target.value : form.end_date })}
+              />
+            </div>
+            <div className="flex-1 space-y-2">
+              <Label>End Date</Label>
+              <Input
+                type="date"
+                value={form.end_date}
+                min={form.date}
+                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+              />
+            </div>
           </div>
 
           {/* Full day toggle */}

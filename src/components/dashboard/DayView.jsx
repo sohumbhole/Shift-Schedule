@@ -270,7 +270,12 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
 
   const totalShiftCount = dayShifts.length;
-  const totalHours = dayShifts.reduce((sum, s) => sum + Math.max(0, (timeToMinutes(s.end_time) - timeToMinutes(s.start_time)) / 60), 0);
+  const totalHours = dayShifts.reduce((sum, s) => {
+    const start = timeToMinutes(s.start_time);
+    let end = timeToMinutes(s.end_time);
+    if (end <= start) end += 24 * 60;
+    return sum + (end - start) / 60;
+  }, 0);
 
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -694,7 +699,12 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
           ) : (
             employees.map((emp) => {
               const empShifts = dayShifts.filter((s) => s.employee_id === emp.id);
-              const empHours = empShifts.reduce((sum, s) => sum + Math.max(0, (timeToMinutes(s.end_time) - timeToMinutes(s.start_time)) / 60), 0);
+              const empHours = empShifts.reduce((sum, s) => {
+                const start = timeToMinutes(s.start_time);
+                let end = timeToMinutes(s.end_time);
+                if (end <= start) end += 24 * 60;
+                return sum + (end - start) / 60;
+              }, 0);
               const isHoverTarget = hoveredEmpId === emp.id && moveDragRef.current && moveDragRef.current.finalTargetEmpId !== moveDragRef.current.origEmp.id;
               const empTimeOffs = timeOffs.filter((t) => t.employee_id === emp.id && isSameDay(new Date(t.date + "T00:00:00"), day));
 

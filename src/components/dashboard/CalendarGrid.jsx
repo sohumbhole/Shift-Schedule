@@ -72,10 +72,13 @@ export default function CalendarGrid({ weekStart, shifts, timeOffs = [], events 
 
   const EmployeeRow = ({ emp, index, isDragging }) => {
     const empShifts = shifts.filter((s) => s.employee_id === emp.id && days.some((d) => isSameDay(new Date(s.date + "T00:00:00"), d)));
-    const totalHrs = empShifts.reduce((sum, s) => {
+    const totalHrs = empShifts.reduce((sSum, s) => {
       const [sh, sm] = s.start_time.split(":").map(Number);
       const [eh, em] = s.end_time.split(":").map(Number);
-      return sum + Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60);
+      const start = sh * 60 + sm;
+      let end = eh * 60 + em;
+      if (end <= start) end += 24 * 60;
+      return sSum + (end - start) / 60;
     }, 0);
 
     const MAX_VISIBLE_ITEMS = 2;

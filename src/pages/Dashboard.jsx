@@ -340,11 +340,29 @@ export default function Dashboard() {
     setEventModalOpen(false);
   };
 
-  const handleSaveTimeOff = (data, editId) => {
+  const handleSaveTimeOff = async (data, editId) => {
     if (editId) {
       updateTimeOff.mutate({ id: editId, data });
     } else {
-      createTimeOff.mutate(data);
+      if (data.date && data.end_date && data.date !== data.end_date) {
+        // Multi-day creation
+        const start = new Date(data.date + "T00:00:00");
+        const end = new Date(data.end_date + "T00:00:00");
+        const entries = [];
+        let curr = start;
+        while (curr <= end) {
+          entries.push({
+            ...data,
+            date: format(curr, "yyyy-MM-dd"),
+          });
+          curr = new Date(curr.getTime() + 86400000);
+        }
+        // Use bulkCreate to insert all days at once
+        await api.entities.TimeOff.bulkCreate(entries);
+        queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
+      } else {
+        createTimeOff.mutate(data);
+      }
     }
   };
 
