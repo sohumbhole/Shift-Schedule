@@ -36,8 +36,8 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
     if (editTimeOff) {
       setForm({
         employee_id: editTimeOff.employee_id || "",
-        date: editTimeOff.date || "",
-        end_date: editTimeOff.end_date || editTimeOff.date || "",
+        date: (editTimeOff.start_date || editTimeOff.date || "").substring(0, 10),
+        end_date: (editTimeOff.end_date || editTimeOff.start_date || editTimeOff.date || "").substring(0, 10),
         type: editTimeOff.type || "regular_off",
         full_day: editTimeOff.full_day !== false,
         start_time: editTimeOff.start_time || "00:00",
@@ -60,7 +60,7 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
   }, [editTimeOff, employee, employees, date, open, storeSettings]);
 
   const handleSave = () => {
-    if (!form.employee_id || !form.date || !form.type) return;
+    if (!form.employee_id || !form.date) return;
     const emp = employees.find((e) => e.id === form.employee_id);
     const { open: storeOpen, close: storeClose } = getStoreTimes(storeSettings, form.date);
     onSave({

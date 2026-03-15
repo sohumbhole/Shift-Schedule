@@ -112,7 +112,7 @@ export const supabaseApi = {
         const { data, error } = await supabase
           .from('time_off')
           .select('*')
-          .order('date');
+          .order('start_date');
         if (error) throw error;
         return toAppRows(data);
       },

@@ -652,7 +652,12 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                   <div ref={provided.innerRef} {...provided.droppableProps}>
                     {employees.map((emp, idx) => {
                       const empShifts = dayShifts.filter((s) => s.employee_id === emp.id);
-                      const empHours = empShifts.reduce((sum, s) => sum + Math.max(0, (timeToMinutes(s.end_time) - timeToMinutes(s.start_time)) / 60), 0);
+                      const empHours = empShifts.reduce((sum, s) => {
+                        const start = timeToMinutes(s.start_time);
+                        let end = timeToMinutes(s.end_time);
+                        if (end <= start) end += 24 * 60;
+                        return sum + Math.max(0, (end - start) / 60);
+                      }, 0);
                       const empTimeOffs = timeOffs.filter((t) => t.employee_id === emp.id && isSameDay(new Date(t.date + "T00:00:00"), day));
                       return (
                         <Draggable key={emp.id} draggableId={emp.id} index={idx}>
@@ -706,7 +711,13 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                 return sum + (end - start) / 60;
               }, 0);
               const isHoverTarget = hoveredEmpId === emp.id && moveDragRef.current && moveDragRef.current.finalTargetEmpId !== moveDragRef.current.origEmp.id;
-              const empTimeOffs = timeOffs.filter((t) => t.employee_id === emp.id && isSameDay(new Date(t.date + "T00:00:00"), day));
+              const empTimeOffs = timeOffs.filter((t) => {
+                if (t.employee_id !== emp.id) return false;
+                const d = format(day, "yyyy-MM-dd");
+                const start = t.start_date || t.date;
+                const end = t.end_date || start;
+                return d >= start && d <= end;
+              });
 
               return (
                 <div

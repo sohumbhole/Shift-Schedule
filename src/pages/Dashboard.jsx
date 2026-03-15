@@ -219,7 +219,7 @@ export default function Dashboard() {
 
   // Sort employees: custom order first, then new ones appended at the end
   const employees = (() => {
-    const base = [...rawEmployees].sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+    const base = [...rawEmployees].sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime());
     if (!employeeOrder || employeeOrder.length === 0) return base;
     const orderMap = {};
     employeeOrder.forEach((id, i) => { orderMap[id] = i; });
@@ -341,28 +341,14 @@ export default function Dashboard() {
   };
 
   const handleSaveTimeOff = async (data, editId) => {
+    // Map UI 'date' to DB 'start_date'
+    const { date, ...rest } = data;
+    const payload = { ...rest, start_date: date };
+
     if (editId) {
-      updateTimeOff.mutate({ id: editId, data });
+      updateTimeOff.mutate({ id: editId, data: payload });
     } else {
-      if (data.date && data.end_date && data.date !== data.end_date) {
-        // Multi-day creation
-        const start = new Date(data.date + "T00:00:00");
-        const end = new Date(data.end_date + "T00:00:00");
-        const entries = [];
-        let curr = start;
-        while (curr <= end) {
-          entries.push({
-            ...data,
-            date: format(curr, "yyyy-MM-dd"),
-          });
-          curr = new Date(curr.getTime() + 86400000);
-        }
-        // Use bulkCreate to insert all days at once
-        await api.entities.TimeOff.bulkCreate(entries);
-        queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
-      } else {
-        createTimeOff.mutate(data);
-      }
+      createTimeOff.mutate(payload);
     }
   };
 
@@ -667,20 +653,12 @@ export default function Dashboard() {
             }}
             isDayView={!!selectedDay}
             selectedDay={selectedDay}
-            onCopyPreviousDay={() => setCopyConfirmOpen(true)}
             onCopyPreviousWeek={() => setCopyWeekConfirmOpen(true)}
             onClearWeek={handleClearWeek}
-            onClearDay={handleClearDay}
             shifts={shifts}
             employees={employees}
-            selectedDay={selectedDay}
-            onNavigateToWeek={(newWeekStart) => {
-              setWeekStart(newWeekStart);
-              setSelectedDay(null);
-            }}
-            onNavigateToDay={(date) => {
-              setSelectedDay(date);
-            }}
+            onNavigateToWeek={setWeekStart}
+            onNavigateToDay={setSelectedDay}
           />
         </div>
         {isReorderMode ? (

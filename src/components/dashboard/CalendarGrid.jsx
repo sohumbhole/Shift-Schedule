@@ -87,9 +87,13 @@ export default function CalendarGrid({ weekStart, shifts, timeOffs = [], events 
       const dayShifts = shifts
         .filter((s) => s.employee_id === emp.id && isSameDay(new Date(s.date + "T00:00:00"), day))
         .sort((a, b) => a.start_time.localeCompare(b.start_time));
-      const dayTimeOffs = timeOffs.filter(
-        (t) => t.employee_id === emp.id && isSameDay(new Date(t.date + "T00:00:00"), day)
-      );
+      const dayTimeOffs = timeOffs.filter((t) => {
+        if (t.employee_id !== emp.id) return false;
+        const d = format(day, "yyyy-MM-dd");
+        const start = t.start_date || t.date;
+        const end = t.end_date || start;
+        return d >= start && d <= end;
+      });
 
       const allItems = [...dayTimeOffs, ...dayShifts];
       const isExpanded = expandedCell === `${emp.id}-${day.toISOString()}`;
