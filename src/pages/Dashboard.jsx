@@ -340,15 +340,18 @@ export default function Dashboard() {
     setEventModalOpen(false);
   };
 
-  const handleSaveTimeOff = async (data, editId) => {
-    // Map UI 'date' to DB 'start_date'
-    const { date, ...rest } = data;
-    const payload = { ...rest, start_date: date };
+  const handleSaveTimeOff = async (entries, editId) => {
+    // entries is always an array of single-day payloads (no end_date)
+    // Map UI 'date' field -> DB 'start_date' for each entry
+    const payloads = entries.map(({ date, ...rest }) => ({ ...rest, start_date: date }));
 
     if (editId) {
-      updateTimeOff.mutate({ id: editId, data: payload });
+      // Editing: only one row at a time — update in place
+      updateTimeOff.mutate({ id: editId, data: payloads[0] });
     } else {
-      createTimeOff.mutate(payload);
+      // Creating: bulk-insert all days at once (works for 1 or many)
+      await api.entities.TimeOff.bulkCreate(payloads);
+      queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
     }
   };
 

@@ -21,10 +21,12 @@ function getStoreTimes(storeSettings, date) {
 }
 
 export default function TimeOffModal({ open, onClose, date, employee, employees, onSave, onDelete, editTimeOff, storeSettings }) {
+  // uiEndDate is purely a UI helper — never sent to the DB.
+  // On save we expand the range into individual single-day rows.
   const [form, setForm] = useState({
     employee_id: "",
     date: "",
-    end_date: "",
+    uiEndDate: "",
     type: "regular_off",
     full_day: true,
     start_time: "00:00",
@@ -34,10 +36,11 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
 
   useEffect(() => {
     if (editTimeOff) {
+      const dayStr = (editTimeOff.start_date || editTimeOff.date || "").substring(0, 10);
       setForm({
         employee_id: editTimeOff.employee_id || "",
-        date: (editTimeOff.start_date || editTimeOff.date || "").substring(0, 10),
-        end_date: (editTimeOff.end_date || editTimeOff.start_date || editTimeOff.date || "").substring(0, 10),
+        date: dayStr,
+        uiEndDate: dayStr, // editing is always single-day
         type: editTimeOff.type || "regular_off",
         full_day: editTimeOff.full_day !== false,
         start_time: editTimeOff.start_time || "00:00",
@@ -46,10 +49,11 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
       });
     } else {
       const { open: storeOpen, close: storeClose } = getStoreTimes(storeSettings, date);
+      const dayStr = date ? format(date, "yyyy-MM-dd") : "";
       setForm({
         employee_id: employee?.id || (employees?.[0]?.id || ""),
-        date: date ? format(date, "yyyy-MM-dd") : "",
-        end_date: date ? format(date, "yyyy-MM-dd") : "",
+        date: dayStr,
+        uiEndDate: dayStr,
         type: "regular_off",
         full_day: true,
         start_time: storeOpen,
@@ -62,13 +66,31 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
   const handleSave = () => {
     if (!form.employee_id || !form.date) return;
     const emp = employees.find((e) => e.id === form.employee_id);
-    const { open: storeOpen, close: storeClose } = getStoreTimes(storeSettings, form.date);
-    onSave({
-      ...form,
-      employee_name: emp?.name || "",
-      start_time: form.full_day ? storeOpen : form.start_time,
-      end_time: form.full_day ? storeClose : form.end_time,
-    }, editTimeOff?.id);
+
+    // Build all dates in the selected range (inclusive)
+    const start = new Date(form.date + "T00:00:00");
+    const end = new Date((form.uiEndDate || form.date) + "T00:00:00");
+    const dates = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(format(d, "yyyy-MM-dd"));
+    }
+
+    // One payload per day — no end_date field
+    const entries = dates.map((dayStr) => {
+      const { open: storeOpen, close: storeClose } = getStoreTimes(storeSettings, dayStr);
+      return {
+        employee_id: form.employee_id,
+        employee_name: emp?.name || "",
+        date: dayStr,
+        type: form.type,
+        full_day: form.full_day,
+        start_time: form.full_day ? storeOpen : form.start_time,
+        end_time: form.full_day ? storeClose : form.end_time,
+        reason: form.reason,
+      };
+    });
+
+    onSave(entries, editTimeOff?.id);
     onClose();
   };
 
@@ -141,16 +163,16 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
               <Input
                 type="date"
                 value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value, end_date: form.end_date < e.target.value ? e.target.value : form.end_date })}
+                onChange={(e) => setForm({ ...form, date: e.target.value, uiEndDate: form.uiEndDate < e.target.value ? e.target.value : form.uiEndDate })}
               />
             </div>
             <div className="flex-1 space-y-2">
               <Label>End Date</Label>
               <Input
                 type="date"
-                value={form.end_date}
+                value={form.uiEndDate}
                 min={form.date}
-                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                onChange={(e) => setForm({ ...form, uiEndDate: e.target.value })}
               />
             </div>
           </div>
