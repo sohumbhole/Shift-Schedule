@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Loader2, Clock, Store, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import DataControls from "@/components/dashboard/DataControls";
+import { loadTestData, resetAllData } from "@/utils/testData";
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -30,6 +32,19 @@ export default function Settings() {
   });
   const [hours, setHours] = useState({});
   const [saved, setSaved] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+
+  const handleLoadTestData = async () => {
+    setIsLoadingData(true);
+    await loadTestData(queryClient);
+    setIsLoadingData(false);
+  };
+
+  const handleResetAll = async () => {
+    setIsLoadingData(true);
+    await resetAllData(queryClient);
+    setIsLoadingData(false);
+  };
 
   useEffect(() => {
     if (settings) {
@@ -180,6 +195,12 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-20">
+        <h3 className="text-sm font-medium text-red-500 mb-2">Danger Zone</h3>
+        <p className="text-sm text-gray-500 mb-4">Actions below will modify or delete data permanently.</p>
+        <DataControls onLoadTestData={handleLoadTestData} onResetAll={handleResetAll} isLoading={isLoadingData} />
       </div>
     </div>
   );

@@ -5,13 +5,14 @@ import { Database, Trash2, Loader2 } from "lucide-react";
 
 export default function DataControls({ onLoadTestData, onResetAll, isLoading }) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showLoadConfirm, setShowLoadConfirm] = useState(false);
 
   return (
-    <div id="data-controls" className="flex items-center gap-2">
+    <div id="data-controls" className="flex items-center gap-2 mt-8">
       <Button
         variant="outline"
         size="sm"
-        onClick={onLoadTestData}
+        onClick={() => setShowLoadConfirm(true)}
         disabled={isLoading}
         className="text-xs gap-1.5"
       >
@@ -29,12 +30,35 @@ export default function DataControls({ onLoadTestData, onResetAll, isLoading }) 
         Reset All
       </Button>
 
+      <AlertDialog open={showLoadConfirm} onOpenChange={setShowLoadConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Load Test Data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will overwrite existing data with sample employees and shifts. This action cannot be undone. Are you sure?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onLoadTestData();
+                setShowLoadConfirm(false);
+              }}
+              className="bg-orange-500 hover:bg-orange-600"
+            >
+              Yes, Load Data
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reset All Data?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete all employees and shifts. This action cannot be undone.
+              This will permanently delete all employees and shifts. This action cannot be undone. Are you sure?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
