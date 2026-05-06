@@ -1,39 +1,115 @@
-**Welcome to your Base44 project** 
+# Shift Schedule
 
-**About**
+A restaurant employee scheduling web app built for managing shifts, time off, and store events. Built for personal family use.
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+---
 
-This project contains everything you need to run your app locally.
+## What It Does
 
-**Edit the code in your local development environment**
+- **Dashboard** — weekly calendar view of all employee shifts. Click any day to open a detailed day view.
+- **Employees** — add, edit, and manage staff profiles (name, color, hours, food safety cert, etc.)
+- **Time Off** — log regular days off or custom time-off requests per employee
+- **Events** — add store-wide events (holidays, special days) that show on the calendar
+- **Settings** — configure store name, manager, and opening/closing hours per day of week
+- **Reorder employees** — drag to rearrange the order employees appear on the schedule
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+---
 
-**Prerequisites:** 
+## Tech Stack
 
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
+- **Frontend**: React 18 + Vite + React Router
+- **UI**: Tailwind CSS + shadcn/ui components
+- **Database + Auth**: Supabase (PostgreSQL with Row Level Security)
+- **Data fetching**: TanStack React Query
+- **API routes**: Vercel Serverless Functions (`/api/` folder)
+- **Email**: SendGrid (for signup verification emails)
+- **Deployed on**: Vercel
+
+---
+
+## Running Locally
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Set up environment variables
+
+Create a `.env.local` file in the project root:
+
+```env
+VITE_SUPABASE_URL=https://ituelwpduyuupmyhxhej.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+VITE_SENDGRID_API_KEY=your_sendgrid_key_here
+VITE_APP_BASE_URL=http://localhost:5173
+```
+
+> **Where to find these**: Supabase Dashboard → your project → Settings → API
+
+### 3. Start the dev server
+
+```bash
+npm run dev
+```
+
+This runs the frontend at `http://localhost:5173`.
+
+> **Important**: The `/api/auth/*` routes (signup, email verification, password reset) are Vercel Serverless Functions. They **only work on Vercel** when using `npm run dev`. To test auth flows locally, use:
+> ```bash
+> npx vercel dev
+> ```
+> This runs both the frontend and the API functions together locally.
+
+---
+
+## Signing In
+
+The app requires a Supabase account to log in. There is a sign-up flow on the login page, but it requires SendGrid to be configured (sends a verification email).
+
+**For internal/family use**: accounts are best created directly in the Supabase dashboard under Authentication → Users, then mark them as verified.
+
+---
+
+## Database Schema
+
+Five tables in Supabase (all protected by Row Level Security — each user only sees their own data):
+
+| Table | Purpose |
+|-------|---------|
+| `employees` | Staff profiles (name, color, hours, notes) |
+| `shifts` | Individual shift entries (employee, date, start/end time) |
+| `time_off` | Time-off entries (regular off or custom requests) |
+| `events` | Store-wide calendar events |
+| `store_settings` | Store name, manager, hours per day of week, employee sort order |
+
+The full schema is in `supabase/migrations/001_initial_schema.sql`.
+
+---
+
+## Deployment
+
+Deployed automatically via Vercel on push to `main`. Environment variables are configured in the Vercel project dashboard.
+
+Live URL: `https://shift-schedule-website.vercel.app` (or check Vercel dashboard for current URL)
+
+---
+
+## Project Structure
 
 ```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+src/
+  pages/          # Top-level pages (Dashboard, Employees, Settings, etc.)
+  components/     # Reusable UI components
+    dashboard/    # Calendar grid, shift blocks, modals
+    employees/    # Employee cards and modals
+    ui/           # shadcn/ui base components
+  api/            # API client (routes to Supabase or mock)
+  lib/            # Auth context, Supabase client, utils
+api/
+  auth/           # Vercel serverless functions (signup, verify, reset-password)
+supabase/
+  migrations/     # SQL schema files
 ```
-
-Run the app: `npm run dev`
-
-**Publish your changes**
-
-Open [Base44.com](http://Base44.com) and click on Publish.
-
-**Docs & Support**
-
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
-
-Support: [https://app.base44.com/support](https://app.base44.com/support)
