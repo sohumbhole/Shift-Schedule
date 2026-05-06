@@ -36,21 +36,31 @@ export default function Login() {
         const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
 
-        // Check if user has been verified via the backend
-        const verifyCheck = await fetch('/api/auth/check-verified', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id }),
-        });
-        const verifyData = await verifyCheck.json();
+        // Check verification — try the API endpoint first (works on Vercel),
+        // fall back to user metadata if endpoint is unavailable (local dev).
+        let verified = false;
+        try {
+          const verifyCheck = await fetch('/api/auth/check-verified', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id }),
+          });
+          if (verifyCheck.ok) {
+            const verifyData = await verifyCheck.json();
+            verified = verifyData.verified;
+          } else {
+            verified = user.user_metadata?.verified === true || !!user.email_confirmed_at;
+          }
+        } catch {
+          verified = user.user_metadata?.verified === true || !!user.email_confirmed_at;
+        }
 
-        if (!verifyData.verified) {
-           await supabase.auth.signOut();
-           throw new Error('Please verify your email address before signing in. Check your inbox for the verification link.');
+        if (!verified) {
+          await supabase.auth.signOut();
+          throw new Error('Please verify your email address before signing in. Check your inbox for the verification link.');
         }
 
         navigate('/', { replace: true });
-        window.location.reload();
       }
     } catch (err) {
       setError(err.message || 'Something went wrong');
