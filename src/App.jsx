@@ -8,6 +8,11 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import { isSupabaseConfigured } from '@/lib/supabaseClient';
 import Login from './pages/Login';
+import { UndoHistoryProvider } from '@/lib/undoHistory';
+import { DashboardNavProvider } from '@/lib/dashboardNav';
+import { useUndoRedo } from '@/hooks/useUndoRedo';
+import UndoToast from '@/components/ui/UndoToast';
+import { useState, useCallback } from 'react';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -16,6 +21,29 @@ const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
+
+// Mounts the global Ctrl+Z / Ctrl+Shift+Z listener and the undo toast.
+// Must live inside the Router so it can use useNavigate/useLocation.
+function UndoRedoController() {
+  const [toast, setToast] = useState(null);
+  const [toastKey, setToastKey] = useState(0);
+
+  const showToast = useCallback(({ message, isRedo }) => {
+    setToast({ message, isRedo });
+    setToastKey((k) => k + 1);
+  }, []);
+
+  useUndoRedo({ showToast });
+
+  return toast ? (
+    <UndoToast
+      key={toastKey}
+      message={toast.message}
+      isRedo={toast.isRedo}
+      onDismiss={() => setToast(null)}
+    />
+  ) : null;
+}
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -38,25 +66,28 @@ const AuthenticatedApp = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      {Object.entries(Pages).map(([path, Page]) => (
-        <Route
-          key={path}
-          path={`/${path}`}
-          element={
-            <LayoutWrapper currentPageName={path}>
-              <Page />
-            </LayoutWrapper>
-          }
-        />
-      ))}
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <>
+      <UndoRedoController />
+      <Routes>
+        <Route path="/" element={
+          <LayoutWrapper currentPageName={mainPageKey}>
+            <MainPage />
+          </LayoutWrapper>
+        } />
+        {Object.entries(Pages).map(([path, Page]) => (
+          <Route
+            key={path}
+            path={`/${path}`}
+            element={
+              <LayoutWrapper currentPageName={path}>
+                <Page />
+              </LayoutWrapper>
+            }
+          />
+        ))}
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+    </>
   );
 };
 
@@ -64,23 +95,27 @@ const AuthenticatedApp = () => {
 function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
-      <Router>
-        <Routes>
-          <Route
-            path="/login"
-            element={isSupabaseConfigured() ? <Login /> : <Navigate to="/" replace />}
-          />
-          <Route
-            path="*"
-            element={
-              <AuthProvider>
-                <AuthenticatedApp />
-              </AuthProvider>
-            }
-          />
-        </Routes>
-      </Router>
-      <Toaster />
+      <UndoHistoryProvider>
+        <DashboardNavProvider>
+          <Router>
+            <Routes>
+              <Route
+                path="/login"
+                element={isSupabaseConfigured() ? <Login /> : <Navigate to="/" replace />}
+              />
+              <Route
+                path="*"
+                element={
+                  <AuthProvider>
+                    <AuthenticatedApp />
+                  </AuthProvider>
+                }
+              />
+            </Routes>
+          </Router>
+          <Toaster />
+        </DashboardNavProvider>
+      </UndoHistoryProvider>
     </QueryClientProvider>
   )
 }

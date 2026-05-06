@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/api/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { startOfWeek, addWeeks, subWeeks, format, subDays, isSameDay } from "date-fns";
+import { useUndoHistory } from "@/lib/undoHistory";
+import { useDashboardNav } from "@/lib/dashboardNav";
 import WeekNav from "../components/dashboard/WeekNav";
 import CalendarGrid from "../components/dashboard/CalendarGrid";
 import DayView from "../components/dashboard/DayView";
@@ -62,6 +64,8 @@ export default function Dashboard() {
   const [eventDate, setEventDate] = useState(null);
   const [editingEvent, setEditingEvent] = useState(null);
   const queryClient = useQueryClient();
+  const history = useUndoHistory();
+  const dashboardNav = useDashboardNav();
 
   const { data: storeSettings = [] } = useQuery({
     queryKey: ["storeSettings"],
@@ -79,6 +83,25 @@ export default function Dashboard() {
   useEffect(() => {
     saveViewState(weekStart, selectedDay);
   }, [weekStart, selectedDay]);
+
+  // Keep a ref to the current view state so the undo system can read it
+  // without needing to re-register on every selectedDay/weekStart change.
+  const viewStateRef = useRef({ isDayView: false });
+  useEffect(() => {
+    viewStateRef.current = { isDayView: selectedDay !== null };
+  }, [selectedDay]);
+
+  // Register a callback so the undo/redo system can jump to the right week/day
+  useEffect(() => {
+    dashboardNav.register(
+      (newWeek, newDay) => {
+        if (newWeek) setWeekStart(newWeek);
+        setSelectedDay(newDay || null);
+      },
+      () => viewStateRef.current,
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load custom order from store settings
   useEffect(() => {
@@ -123,6 +146,10 @@ export default function Dashboard() {
     queryFn: () => api.entities.Event.list(),
   });
 
+  // Helper: week start string for a given date string
+  const weekOf = (dateStr) =>
+    format(startOfWeek(new Date(dateStr + "T00:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
+
   const createTimeOff = useMutation({
     mutationFn: (data) => api.entities.TimeOff.create(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["timeOffs"] }),
@@ -133,49 +160,126 @@ export default function Dashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["timeOffs"] }),
   });
 
+  // Caller must pass { id, timeOff: fullObject } so we can store it for undo
   const deleteTimeOff = useMutation({
-    mutationFn: (id) => api.entities.TimeOff.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["timeOffs"] }),
+    mutationFn: ({ id }) => api.entities.TimeOff.delete(id),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
+      const t = variables.timeOff;
+      if (!t) return;
+      const dateStr = t.date || t.start_date || "";
+      const { id: _id, user_id: _u, created_date: _c, ...payload } = t;
+      history.push({
+        type: "DELETE_TIME_OFF",
+        description: `Removed time off for ${t.employee_name || "employee"}`,
+        page: "dashboard",
+        weekStart: dateStr ? weekOf(dateStr) : null,
+        dayDate: dateStr || null,
+        backward: payload,
+        forward: { id: t.id },
+      });
+    },
   });
 
   const createShift = useMutation({
     mutationFn: (data) => api.entities.Shift.create(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shifts"] }),
+    onSuccess: (created, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["shifts"] });
+      history.push({
+        type: "ADD_SHIFT",
+        description: `Added shift for ${created.employee_name || "employee"}`,
+        page: "dashboard",
+        weekStart: weekOf(created.date),
+        dayDate: created.date,
+        backward: { id: created.id },
+        forward: variables,
+      });
+    },
   });
 
   const updateShift = useMutation({
+    // origData is the shift before the update - used for the undo entry
     mutationFn: ({ id, data }) => api.entities.Shift.update(id, data),
     onMutate: async ({ id, data }) => {
-      // Cancel any in-flight refetches so they don't overwrite our optimistic update
       await queryClient.cancelQueries({ queryKey: ["shifts"] });
-      // Snapshot current cache for rollback
       const previousShifts = queryClient.getQueryData(["shifts"]);
-      // Immediately update the UI
       queryClient.setQueryData(["shifts"], (old) =>
         (old || []).map((s) => s.id === id ? { ...s, ...data } : s)
       );
       return { previousShifts };
     },
     onError: (_err, _vars, context) => {
-      // Server failed - roll back to what we had before
       if (context?.previousShifts) {
         queryClient.setQueryData(["shifts"], context.previousShifts);
       }
     },
+    onSuccess: (_, variables) => {
+      const { id, data, origData } = variables;
+      if (!origData) return;
+      const changed = origData.start_time !== data.start_time || origData.end_time !== data.end_time;
+      history.push({
+        type: changed ? "RESIZE_SHIFT" : "MOVE_SHIFT",
+        description: `${changed ? "Resized" : "Moved"} ${origData.employee_name || "shift"}`,
+        page: "dashboard",
+        weekStart: weekOf(origData.date),
+        dayDate: origData.date,
+        backward: {
+          id,
+          start_time: origData.start_time,
+          end_time: origData.end_time,
+          employee_id: origData.employee_id,
+          employee_name: origData.employee_name,
+          color: origData.color,
+        },
+        forward: { id, ...data },
+      });
+    },
     onSettled: () => {
-      // Always re-sync with server once the mutation settles
       queryClient.invalidateQueries({ queryKey: ["shifts"] });
     },
   });
 
+  // Caller must pass { id, shift: fullObject }
   const deleteShift = useMutation({
-    mutationFn: (id) => api.entities.Shift.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shifts"] }),
+    mutationFn: ({ id }) => api.entities.Shift.delete(id),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["shifts"] });
+      const s = variables.shift;
+      if (!s) return;
+      history.push({
+        type: "DELETE_SHIFT",
+        description: `Deleted ${s.employee_name || "employee"}'s shift`,
+        page: "dashboard",
+        weekStart: weekOf(s.date),
+        dayDate: s.date,
+        backward: {
+          employee_id: s.employee_id,
+          employee_name: s.employee_name,
+          date: s.date,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          color: s.color,
+        },
+        forward: { id: s.id },
+      });
+    },
   });
 
   const createEvent = useMutation({
     mutationFn: (data) => api.entities.Event.create(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+    onSuccess: (created, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      const dateStr = created.start_date || created.date || null;
+      history.push({
+        type: "ADD_EVENT",
+        description: `Added event: ${created.name || "event"}`,
+        page: "dashboard",
+        weekStart: dateStr ? weekOf(dateStr) : null,
+        dayDate: dateStr,
+        backward: { id: created.id },
+        forward: variables,
+      });
+    },
   });
 
   const updateEvent = useMutation({
@@ -183,9 +287,25 @@ export default function Dashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
   });
 
+  // Caller must pass { id, event: fullObject }
   const deleteEvent = useMutation({
-    mutationFn: (id) => api.entities.Event.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+    mutationFn: ({ id }) => api.entities.Event.delete(id),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      const ev = variables.event;
+      if (!ev) return;
+      const dateStr = ev.start_date || ev.date || null;
+      const { id: _id, user_id: _u, created_date: _c, ...payload } = ev;
+      history.push({
+        type: "DELETE_EVENT",
+        description: `Deleted event: ${ev.name || "event"}`,
+        page: "dashboard",
+        weekStart: dateStr ? weekOf(dateStr) : null,
+        dayDate: dateStr,
+        backward: payload,
+        forward: { id: ev.id },
+      });
+    },
   });
 
   const handleAddShift = (day, preselectedEmployee, defaultStartTime = null) => {
@@ -240,22 +360,34 @@ export default function Dashboard() {
 
   const handleSaveTimeOff = async (entries, editId) => {
     // entries is always an array of single-day payloads (no end_date)
-    // Map UI 'date' field -> DB 'start_date' for each entry
-    const payloads = entries.map(({ date, ...rest }) => ({ ...rest, start_date: date }));
+    // Map UI 'date' field to 'date' for DB storage
+    const payloads = entries.map(({ date, ...rest }) => ({ ...rest, date }));
 
     if (editId) {
-      // Editing: only one row at a time - update in place
+      // Editing existing time off - not tracked on the undo stack
       updateTimeOff.mutate({ id: editId, data: payloads[0] });
     } else {
-      // Creating: bulk-insert all days at once (works for 1 or many)
-      await api.entities.TimeOff.bulkCreate(payloads);
+      const created = await api.entities.TimeOff.bulkCreate(payloads);
       queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
+      if (created && created.length > 0) {
+        const dateStr = created[0].date || created[0].start_date || "";
+        history.push({
+          type: "ADD_TIME_OFF",
+          description: `Added time off for ${created[0].employee_name || "employee"}${created.length > 1 ? ` (+${created.length - 1} more)` : ""}`,
+          page: "dashboard",
+          weekStart: dateStr ? weekOf(dateStr) : null,
+          dayDate: dateStr || null,
+          backward: { ids: created.map((t) => t.id) },
+          forward: payloads,
+        });
+      }
     }
   };
 
   const handleSave = (data, editId) => {
     if (editId) {
-      updateShift.mutate({ id: editId, data });
+      const origShift = shifts.find((s) => s.id === editId);
+      updateShift.mutate({ id: editId, data, origData: origShift });
     } else {
       createShift.mutate(data);
     }
@@ -267,28 +399,64 @@ export default function Dashboard() {
       const d = new Date(s.date + "T00:00:00");
       return d >= weekStart && d < weekEndDate;
     });
-    for (const s of weekShifts) await api.entities.Shift.delete(s.id);
-    // Also delete regular_off time offs for the week (keep custom_time_off)
     const weekTimeOffs = timeOffs.filter((t) => {
       if (t.type !== "regular_off") return false;
-      const d = new Date(t.date + "T00:00:00");
+      const d = new Date((t.date || t.start_date) + "T00:00:00");
       return d >= weekStart && d < weekEndDate;
     });
+
+    // Capture payloads before deleting
+    const savedShifts = weekShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedTimeOffs = weekTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) =>
+      ({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date: date || start_date }));
+
+    for (const s of weekShifts) await api.entities.Shift.delete(s.id);
     for (const t of weekTimeOffs) await api.entities.TimeOff.delete(t.id);
     queryClient.invalidateQueries({ queryKey: ["shifts"] });
     queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
+
+    if (savedShifts.length > 0 || savedTimeOffs.length > 0) {
+      const wStartStr = format(weekStart, "yyyy-MM-dd");
+      history.push({
+        type: "CLEAR_WEEK",
+        description: `Cleared week of ${format(weekStart, "MMM d")} (${savedShifts.length} shift${savedShifts.length !== 1 ? "s" : ""})`,
+        page: "dashboard",
+        weekStart: wStartStr,
+        dayDate: null,
+        backward: { shifts: savedShifts, timeOffs: savedTimeOffs },
+        forward: { weekStart: wStartStr, weekEnd: format(weekEndDate, "yyyy-MM-dd") },
+      });
+    }
   };
 
   const handleClearDay = async () => {
     if (!selectedDay) return;
     const dayStr = format(selectedDay, "yyyy-MM-dd");
     const dayShifts = shifts.filter((s) => s.date === dayStr);
+    const dayTimeOffs = timeOffs.filter((t) => (t.date || t.start_date) === dayStr && t.type === "regular_off");
+
+    const savedShifts = dayShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedTimeOffs = dayTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) =>
+      ({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date: date || start_date }));
+
     for (const s of dayShifts) await api.entities.Shift.delete(s.id);
-    // Also delete regular_off time offs for the day (keep custom_time_off)
-    const dayTimeOffs = timeOffs.filter((t) => t.date === dayStr && t.type === "regular_off");
     for (const t of dayTimeOffs) await api.entities.TimeOff.delete(t.id);
     queryClient.invalidateQueries({ queryKey: ["shifts"] });
     queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
+
+    if (savedShifts.length > 0 || savedTimeOffs.length > 0) {
+      history.push({
+        type: "CLEAR_DAY",
+        description: `Cleared ${format(selectedDay, "EEE MMM d")} (${savedShifts.length} shift${savedShifts.length !== 1 ? "s" : ""})`,
+        page: "dashboard",
+        weekStart: format(startOfWeek(selectedDay, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+        dayDate: dayStr,
+        backward: { shifts: savedShifts, timeOffs: savedTimeOffs },
+        forward: { date: dayStr },
+      });
+    }
   };
 
   const handleCopyPreviousWeek = async () => {
@@ -296,54 +464,53 @@ export default function Dashboard() {
     const prevWeekEnd = addWeeks(prevWeekStart, 1);
     const currWeekEnd = addWeeks(weekStart, 1);
 
-    // Delete all shifts in current week
-    const currShifts = shifts.filter((s) => {
-      const d = new Date(s.date + "T00:00:00");
-      return d >= weekStart && d < currWeekEnd;
-    });
-    for (const s of currShifts) await api.entities.Shift.delete(s.id);
-
-    // Delete regular_off time offs in current week (keep custom_time_off / red ones)
+    const currShifts = shifts.filter((s) => { const d = new Date(s.date + "T00:00:00"); return d >= weekStart && d < currWeekEnd; });
     const currTimeOffs = timeOffs.filter((t) => {
       if (t.type !== "regular_off") return false;
-      const d = new Date(t.date + "T00:00:00");
+      const d = new Date((t.date || t.start_date) + "T00:00:00");
       return d >= weekStart && d < currWeekEnd;
     });
+
+    // Capture current week before deleting (for undo)
+    const savedCurrShifts = currShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedCurrTimeOffs = currTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) =>
+      ({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date: date || start_date }));
+
+    for (const s of currShifts) await api.entities.Shift.delete(s.id);
     for (const t of currTimeOffs) await api.entities.TimeOff.delete(t.id);
 
-    // Copy shifts from previous week, offsetting dates by +7 days
-    const prevShifts = shifts.filter((s) => {
-      const d = new Date(s.date + "T00:00:00");
-      return d >= prevWeekStart && d < prevWeekEnd;
+    const prevShifts = shifts.filter((s) => { const d = new Date(s.date + "T00:00:00"); return d >= prevWeekStart && d < prevWeekEnd; });
+    const newShifts = prevShifts.map(({ employee_id, employee_name, start_time, end_time, color, date }) => {
+      const nd = new Date(date + "T00:00:00"); nd.setDate(nd.getDate() + 7);
+      return { employee_id, employee_name, start_time, end_time, color, date: format(nd, "yyyy-MM-dd") };
     });
-    if (prevShifts.length > 0) {
-      await api.entities.Shift.bulkCreate(
-        prevShifts.map(({ employee_id, employee_name, start_time, end_time, color, date }) => {
-          const newDate = new Date(date + "T00:00:00");
-          newDate.setDate(newDate.getDate() + 7);
-          return { employee_id, employee_name, start_time, end_time, color, date: format(newDate, "yyyy-MM-dd") };
-        })
-      );
-    }
+    if (newShifts.length > 0) await api.entities.Shift.bulkCreate(newShifts);
 
-    // Copy regular_off time offs from previous week
     const prevTimeOffs = timeOffs.filter((t) => {
       if (t.type !== "regular_off") return false;
-      const d = new Date(t.date + "T00:00:00");
+      const d = new Date((t.date || t.start_date) + "T00:00:00");
       return d >= prevWeekStart && d < prevWeekEnd;
     });
-    if (prevTimeOffs.length > 0) {
-      await api.entities.TimeOff.bulkCreate(
-        prevTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date }) => {
-          const newDate = new Date(date + "T00:00:00");
-          newDate.setDate(newDate.getDate() + 7);
-          return { employee_id, employee_name, type, full_day, start_time, end_time, reason, date: format(newDate, "yyyy-MM-dd") };
-        })
-      );
-    }
+    const newTimeOffs = prevTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) => {
+      const nd = new Date((date || start_date) + "T00:00:00"); nd.setDate(nd.getDate() + 7);
+      return { employee_id, employee_name, type, full_day, start_time, end_time, reason, date: format(nd, "yyyy-MM-dd") };
+    });
+    if (newTimeOffs.length > 0) await api.entities.TimeOff.bulkCreate(newTimeOffs);
 
     queryClient.invalidateQueries({ queryKey: ["shifts"] });
     queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
+
+    const wStartStr = format(weekStart, "yyyy-MM-dd");
+    history.push({
+      type: "COPY_PREV_WEEK",
+      description: `Copied previous week to ${format(weekStart, "MMM d")}`,
+      page: "dashboard",
+      weekStart: wStartStr,
+      dayDate: null,
+      backward: { weekStart: wStartStr, weekEnd: format(currWeekEnd, "yyyy-MM-dd"), originalShifts: savedCurrShifts, originalTimeOffs: savedCurrTimeOffs },
+      forward: { weekStart: wStartStr, weekEnd: format(currWeekEnd, "yyyy-MM-dd"), shiftsToCreate: newShifts, timeOffsToCreate: newTimeOffs },
+    });
   };
 
   const handleCopyPreviousDay = async () => {
@@ -352,21 +519,28 @@ export default function Dashboard() {
     const prevDateStr = format(prevDay, "yyyy-MM-dd");
     const todayDateStr = format(selectedDay, "yyyy-MM-dd");
 
-    // Delete all shifts for today
     const todayShifts = shifts.filter((s) => s.date === todayDateStr);
+    const savedTodayShifts = todayShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color }));
+
     for (const s of todayShifts) await api.entities.Shift.delete(s.id);
 
-    // Copy previous day's shifts to today
     const prevShifts = shifts.filter((s) => s.date === prevDateStr);
-    if (prevShifts.length > 0) {
-      await api.entities.Shift.bulkCreate(
-        prevShifts.map(({ employee_id, employee_name, start_time, end_time, color }) => ({
-          employee_id, employee_name, start_time, end_time, color, date: todayDateStr,
-        }))
-      );
-    }
+    const newShifts = prevShifts.map(({ employee_id, employee_name, start_time, end_time, color }) =>
+      ({ employee_id, employee_name, start_time, end_time, color, date: todayDateStr }));
+    if (newShifts.length > 0) await api.entities.Shift.bulkCreate(newShifts);
 
     queryClient.invalidateQueries({ queryKey: ["shifts"] });
+
+    history.push({
+      type: "COPY_PREV_DAY",
+      description: `Copied ${format(prevDay, "EEE MMM d")} to ${format(selectedDay, "EEE MMM d")}`,
+      page: "dashboard",
+      weekStart: format(startOfWeek(selectedDay, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+      dayDate: todayDateStr,
+      backward: { date: todayDateStr, originalShifts: savedTodayShifts },
+      forward: { date: todayDateStr, shiftsToCreate: newShifts },
+    });
   };
 
   const handleReorder = useCallback((newOrderIds) => {
@@ -495,7 +669,7 @@ export default function Dashboard() {
               updateData.employee_name = targetEmp.name;
               updateData.color = targetEmp.color;
             }
-            updateShift.mutate({ id, data: updateData });
+            updateShift.mutate({ id, data: updateData, origData: origShift });
           }}
           onShiftCopy={(origShift, targetEmp, newStart, newEnd) => {
             createShift.mutate({
@@ -586,7 +760,7 @@ export default function Dashboard() {
         employee={timeOffEmployee}
         employees={employees}
         onSave={handleSaveTimeOff}
-        onDelete={(id) => deleteTimeOff.mutate(id)}
+        onDelete={(id) => { const t = timeOffs.find((x) => x.id === id); deleteTimeOff.mutate({ id, timeOff: t }); }}
         editTimeOff={editingTimeOff}
         storeSettings={settings}
       />
@@ -600,7 +774,7 @@ export default function Dashboard() {
         storeSettings={settings}
         onSave={handleSave}
         editShift={editingShift}
-        onDelete={(id) => deleteShift.mutate(id)}
+        onDelete={(id) => { const s = shifts.find((x) => x.id === id); deleteShift.mutate({ id, shift: s }); }}
         preselectedEmployeeId={preselectedEmployeeId}
         defaultStartTime={defaultShiftStartTime}
       />
@@ -611,7 +785,7 @@ export default function Dashboard() {
         initialDate={eventDate}
         event={editingEvent}
         onSave={handleSaveEvent}
-        onDelete={(id) => deleteEvent.mutate(id)}
+        onDelete={(id) => { const ev = events.find((x) => x.id === id); deleteEvent.mutate({ id, event: ev }); }}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { api } from "@/api/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useUndoHistory } from "@/lib/undoHistory";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2, Users, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -16,6 +17,7 @@ export default function Employees() {
   const [timeOffEmployee, setTimeOffEmployee] = useState(null);
   const [editingTimeOff, setEditingTimeOff] = useState(null);
   const queryClient = useQueryClient();
+  const history = useUndoHistory();
 
   const urlParams = new URLSearchParams(window.location.search);
   const editEmpId = urlParams.get("edit");
@@ -40,7 +42,18 @@ export default function Employees() {
 
   const createEmployee = useMutation({
     mutationFn: (data) => api.entities.Employee.create(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
+    onSuccess: (created, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      history.push({
+        type: "ADD_EMPLOYEE",
+        description: `Added employee: ${created.name}`,
+        page: "employees",
+        weekStart: null,
+        dayDate: null,
+        backward: { id: created.id },
+        forward: variables,
+      });
+    },
   });
 
   const updateEmployee = useMutation({
@@ -48,10 +61,44 @@ export default function Employees() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
   });
 
-  const deleteEmployee = useMutation({
-    mutationFn: (id) => api.entities.Employee.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
-  });
+  // Cascade delete: removes all of the employee's shifts and time offs first,
+  // then the employee. Stores everything for undo.
+  const handleDeleteEmployee = async (id) => {
+    const emp = rawEmployees.find((e) => e.id === id);
+    // Fetch from cache if available, otherwise fetch from server
+    let allShifts = queryClient.getQueryData(["shifts"]);
+    if (!allShifts) allShifts = await api.entities.Shift.list();
+    let allTimeOffs = queryClient.getQueryData(["timeOffs"]);
+    if (!allTimeOffs) allTimeOffs = await api.entities.TimeOff.list();
+
+    const empShifts = allShifts.filter((s) => s.employee_id === id);
+    const empTimeOffs = allTimeOffs.filter((t) => t.employee_id === id);
+
+    // Save payloads (no id/user_id/created_date) for undo recreation
+    const savedShifts = empShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedTimeOffs = empTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) =>
+      ({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date: date || start_date }));
+    const { id: _id, user_id: _u, created_date: _c, ...empPayload } = emp || {};
+
+    for (const s of empShifts) await api.entities.Shift.delete(s.id);
+    for (const t of empTimeOffs) await api.entities.TimeOff.delete(t.id);
+    await api.entities.Employee.delete(id);
+
+    queryClient.invalidateQueries({ queryKey: ["employees"] });
+    queryClient.invalidateQueries({ queryKey: ["shifts"] });
+    queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
+
+    history.push({
+      type: "DELETE_EMPLOYEE",
+      description: `Deleted employee: ${emp?.name || "employee"}`,
+      page: "employees",
+      weekStart: null,
+      dayDate: null,
+      backward: { employee: empPayload, shifts: savedShifts, timeOffs: savedTimeOffs },
+      forward: { id },
+    });
+  };
 
   const handleSave = (data) => {
     if (selectedEmployee) {
@@ -155,7 +202,7 @@ export default function Employees() {
         }}
         employee={selectedEmployee}
         onSave={handleSave}
-        onDelete={(id) => deleteEmployee.mutate(id)}
+        onDelete={handleDeleteEmployee}
       />
 
       <TimeOffModal
