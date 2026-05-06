@@ -1,5 +1,5 @@
 /**
- * Mock API – in-memory backend for local development.
+ * Mock API - in-memory backend for local development.
  * All entity methods return Promises and match the shapes expected by the UI.
  * Replace with a real client (e.g. Supabase) when connecting to a backend.
  */

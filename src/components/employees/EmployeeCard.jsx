@@ -34,7 +34,7 @@ export default function EmployeeCard({ employee, onClick, onAddTimeOff }) {
             {employee.min_hours && (
               <div className="flex items-center gap-1 text-xs text-gray-400">
                 <Clock className="w-3 h-3" />
-                <span>{employee.min_hours}–{employee.max_hours || "∞"} hrs</span>
+                <span>{employee.min_hours}-{employee.max_hours || "∞"} hrs</span>
               </div>
             )}
             {employee.notes && (

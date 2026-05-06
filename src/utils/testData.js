@@ -35,7 +35,7 @@ export const TEST_EMPLOYEES = [
     available_hours: "Mon-Fri 10am-midnight",
     min_hours: 20,
     max_hours: 32,
-    notes: "College student — prefers not to close on weeknights.",
+    notes: "College student - prefers not to close on weeknights.",
     color: EMPLOYEE_COLORS[1],
     unavailable_hours: [
       { day: "Saturday", start_time: "00:00", end_time: "23:59" },
@@ -45,7 +45,7 @@ export const TEST_EMPLOYEES = [
   {
     name: "Sam Patel",
     title: "Line Cook",
-    available_hours: "Tue–Sun all day",
+    available_hours: "Tue-Sun all day",
     min_hours: 28,
     max_hours: 40,
     notes: "Strong closer. Great on weekends.",
@@ -57,7 +57,7 @@ export const TEST_EMPLOYEES = [
   {
     name: "Casey Morgan",
     title: "Cashier",
-    available_hours: "Thu–Sun 4pm–close",
+    available_hours: "Thu-Sun 4pm-close",
     min_hours: 12,
     max_hours: 20,
     notes: "Part-time only. Not available before 4pm any day.",
@@ -153,7 +153,7 @@ export const loadTestData = async (queryClient) => {
   const testShifts = [];
   const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-  // Build shifts for Mon–Sun of the current week
+  // Build shifts for Mon-Sun of the current week
   // weekStart = Monday
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => {

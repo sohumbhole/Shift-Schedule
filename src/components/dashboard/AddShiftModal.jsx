@@ -291,7 +291,7 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
         const ampm = h >= 12 ? "PM" : "AM";
         return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
       };
-      unavailableWarning = `${selectedEmp.name} is marked unavailable ${fmt(conflict.start_time)} – ${fmt(conflict.end_time)} on ${dayName}.`;
+      unavailableWarning = `${selectedEmp.name} is marked unavailable ${fmt(conflict.start_time)} - ${fmt(conflict.end_time)} on ${dayName}.`;
     }
   }
 
@@ -313,7 +313,7 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
     });
 
     if (conflictingShift) {
-      shiftConflictWarning = `Conflicts with existing shift ${fmtDisplay(conflictingShift.start_time)} – ${fmtDisplay(conflictingShift.end_time)}.`;
+      shiftConflictWarning = `Conflicts with existing shift ${fmtDisplay(conflictingShift.start_time)} - ${fmtDisplay(conflictingShift.end_time)}.`;
     }
   }
 
@@ -334,7 +334,7 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
     if (endMins <= startMins) endMins += 24 * 60;
 
     if (startMins < openMins || endMins > closeMins) {
-      closedWarning = `Shift must be within store hours (${fmt(storeHours.open)} – ${fmt(storeHours.close)}).`;
+      closedWarning = `Shift must be within store hours (${fmt(storeHours.open)} - ${fmt(storeHours.close)}).`;
     }
   }
 

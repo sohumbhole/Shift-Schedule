@@ -21,7 +21,7 @@ function getStoreTimes(storeSettings, date) {
 }
 
 export default function TimeOffModal({ open, onClose, date, employee, employees, onSave, onDelete, editTimeOff, storeSettings }) {
-  // uiEndDate is purely a UI helper — never sent to the DB.
+  // uiEndDate is purely a UI helper - never sent to the DB.
   // On save we expand the range into individual single-day rows.
   const [form, setForm] = useState({
     employee_id: "",
@@ -75,7 +75,7 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
       dates.push(format(d, "yyyy-MM-dd"));
     }
 
-    // One payload per day — no end_date field
+    // One payload per day - no end_date field
     const entries = dates.map((dayStr) => {
       const { open: storeOpen, close: storeClose } = getStoreTimes(storeSettings, dayStr);
       return {
@@ -196,7 +196,7 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
                 <Label className="text-xs">From</Label>
                 <Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} className="h-8 text-sm" />
               </div>
-              <span className="text-gray-400 mt-5">–</span>
+              <span className="text-gray-400 mt-5">-</span>
               <div className="flex-1 space-y-1">
                 <Label className="text-xs">To</Label>
                 <Input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} className="h-8 text-sm" />

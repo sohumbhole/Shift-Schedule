@@ -17,7 +17,7 @@ export default function ShiftBlock({ shift, onDelete, onClick }) {
       <div className="truncate flex-1">
         <span className="font-semibold">{shift.employee_name}</span>
         <span className="ml-1.5 opacity-70">
-          {shift.start_time}–{shift.end_time}
+          {shift.start_time}-{shift.end_time}
         </span>
       </div>
       <button

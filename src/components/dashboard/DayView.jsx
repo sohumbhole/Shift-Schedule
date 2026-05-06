@@ -127,12 +127,17 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
       const d = dragRef.current;
       dragRef.current = null;
       if (d && d.moved && d.finalStart !== null) {
+        // Swallow the click the browser fires after mouseup - the cursor may
+        // have moved outside the ShiftBar's new bounds and would otherwise
+        // trigger the timeline's "Add Shift" onClick handler.
+        window.addEventListener("click", (ce) => ce.stopPropagation(), { once: true, capture: true });
         clickBlockedRef.current = true;
         setTimeout(() => { clickBlockedRef.current = false; }, 400);
         onSaveShift(shift.id, minutesToTime(d.finalStart), minutesToTime(d.finalEnd % (24 * 60)), emp.id);
       } else {
+        // No movement - edge was held and released without dragging. Do nothing.
+        // (Edges are resize-only; clicking an edge should not open the edit modal.)
         setLiveStart(null); setLiveEnd(null);
-        if (d && !d.moved && !clickBlockedRef.current) onEditShift(shift);
       }
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp, true);
@@ -205,7 +210,7 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
   );
 }
 
-// ── Ghost overlay — direct DOM manipulation for zero-lag dragging ──
+// ── Ghost overlay - direct DOM manipulation for zero-lag dragging ──
 // We use a ref to the div and update its style directly, bypassing React state.
 function GhostShift({ ghostRef }) {
   return (
@@ -231,7 +236,7 @@ function updateGhostDOM(el, { ghostLeft, ghostTop, ghostWidth, rowHeight, color,
   el.style.backgroundColor = color;
   el.style.border = isCopy ? "2px dashed rgba(255,255,255,0.7)" : "2px solid rgba(255,255,255,0.4)";
   const label = el.querySelector(".ghost-label");
-  if (label) label.textContent = `${fmtTimeFull(startTime)} – ${fmtTimeFull(endTime)}`;
+  if (label) label.textContent = `${fmtTimeFull(startTime)} - ${fmtTimeFull(endTime)}`;
   const copyIcon = el.querySelector(".ghost-copy-icon");
   if (copyIcon) copyIcon.style.display = isCopy ? "inline" : "none";
   const dur = el.querySelector(".ghost-duration");
@@ -279,7 +284,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
 
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
-  const ghostRef = useRef(null); // direct DOM ref for ghost — no setState lag
+  const ghostRef = useRef(null); // direct DOM ref for ghost - no setState lag
   const [hoveredEmpId, setHoveredEmpId] = useState(null); // which emp row is hovered during drag
   const [overlapError, setOverlapError] = useState(null); // brief error message
   const moveDragRef = useRef(null); // cross-row drag state
@@ -305,7 +310,12 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
     e.preventDefault();
 
     const isCopy = e.altKey;
-    document.body.style.cursor = "grabbing";
+    // Inject a global style that overrides every element's cursor during the drag.
+    // Without !important, buttons/links etc. win and confuse the user mid-drag.
+    const cursorStyle = document.createElement("style");
+    cursorStyle.id = "move-drag-cursor";
+    cursorStyle.textContent = "* { cursor: grabbing !important; }";
+    document.head.appendChild(cursorStyle);
     document.body.style.userSelect = "none";
 
     let startMinsAbs = timeToMinutes(shift.start_time);
@@ -357,6 +367,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
       dur,
       grabOffsetMins: grabOffsetMins ?? 0,
       moved: false,
+      wouldCancel: false,
       startX: e.clientX,
       startY: e.clientY,
       finalStart: startMinsAbs,
@@ -384,10 +395,14 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
     });
     setHoveredEmpId(origEmp.id);
 
+    const removeCursorOverride = () => {
+      document.getElementById("move-drag-cursor")?.remove();
+      document.body.style.userSelect = "";
+    };
+
     const cancel = () => {
       cancelled = true;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
+      removeCursorOverride();
       hideGhostDOM(ghostRef.current);
       setHoveredEmpId(null);
       moveDragRef.current = null;
@@ -406,7 +421,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
 
       // Delta-based: compute how many minutes the mouse moved since mousedown,
       // then add to the original shift start. This is correct because the ghost
-      // stays at its original position — we're just tracking how much the user moved.
+      // stays at its original position - we're just tracking how much the user moved.
       const deltaMins = (dx / d.timelinePixelWidth) * totalMinutes;
       let ns = snapToHalfHour(d.origStart + deltaMins);
       ns = Math.max(startHour * 60, Math.min(startHour * 60 + totalMinutes - d.dur, ns));
@@ -441,7 +456,23 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
       const newGhostTop = targetRowRect ? targetRowRect.top : d.origRowTop;
       const newRowHeight = targetRowRect ? targetRowRect.height : d.origRowHeight;
 
-      // Direct DOM update — no React setState, no re-render lag
+      // Out-of-bounds detection - valid drop zone is only the timeline columns
+      // of the employee rows (excludes sidebar, hour header, and events row).
+      const allRowRects = Object.values(rowRectsRef.current);
+      const rowsTop = allRowRects.length > 0 ? Math.min(...allRowRects.map((r) => r.top)) : 0;
+      const rowsBottom = allRowRects.length > 0 ? Math.max(...allRowRects.map((r) => r.bottom)) : Infinity;
+      const isOutOfBounds =
+        ev.clientX < d.timelineLeft ||
+        ev.clientX > d.timelineLeft + d.timelinePixelWidth ||
+        ev.clientY < rowsTop ||
+        ev.clientY > rowsBottom;
+      d.wouldCancel = isOutOfBounds;
+      const overrideEl = document.getElementById("move-drag-cursor");
+      if (overrideEl) overrideEl.textContent = isOutOfBounds
+        ? "* { cursor: not-allowed !important; }"
+        : "* { cursor: grabbing !important; }";
+
+      // Direct DOM update - no React setState, no re-render lag
       updateGhostDOM(ghostRef.current, {
         ghostLeft: newGhostLeft,
         ghostTop: newGhostTop,
@@ -462,8 +493,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
     const onUp = (ev) => {
       if (cancelled) return;
       ev.stopPropagation();
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
+      removeCursorOverride();
       hideGhostDOM(ghostRef.current);
       setHoveredEmpId(null);
 
@@ -474,7 +504,10 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
       window.removeEventListener("mouseup", onUp, true);
       window.removeEventListener("keydown", onKey);
 
-      if (d && d.moved) {
+      if (d && d.moved && d.wouldCancel) {
+        // Released outside day view - cancel the drag, do nothing
+      } else if (d && d.moved) {
+        window.addEventListener("click", (ce) => ce.stopPropagation(), { once: true, capture: true });
         dragJustEndedRef.current = true;
         setTimeout(() => { dragJustEndedRef.current = false; }, 300);
         const targetEmpId = d.finalTargetEmpId;
@@ -511,7 +544,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden" ref={containerRef}>
-      {/* Ghost overlay — rendered once, updated via direct DOM for zero lag */}
+      {/* Ghost overlay - rendered once, updated via direct DOM for zero lag */}
       <GhostShift ghostRef={ghostRef} />
 
       {/* Overlap error toast */}
@@ -544,7 +577,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
             </button>
           </div>
 
-          {/* Day-level copy/clear dropdown — placed right after day title */}
+          {/* Day-level copy/clear dropdown - placed right after day title */}
           <div className="relative" ref={dayMenuRef}>
            <button
              onClick={() => setDayMenuOpen((v) => !v)}
@@ -683,7 +716,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                                 <div className="flex gap-1 flex-wrap">
                                   {empShifts.map((s) => (
                                     <span key={s.id} className="text-xs px-2 py-1 rounded-md text-white font-semibold" style={{ backgroundColor: s.color || "#FF8C00" }}>
-                                      {fmtTimeFull(s.start_time)}–{fmtTimeFull(s.end_time)}
+                                      {fmtTimeFull(s.start_time)}-{fmtTimeFull(s.end_time)}
                                     </span>
                                   ))}
                                   {empShifts.length === 0 && empTimeOffs.length === 0 && (

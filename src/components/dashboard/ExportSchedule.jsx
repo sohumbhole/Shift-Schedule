@@ -60,7 +60,7 @@ function WeekTable({ weekStart, shifts, employees, filterEmployee }) {
                     <span style={{ color: "#aaa", fontSize: 11 }}>OFF</span>
                   ) : (
                     dayShifts.map((s, i) => (
-                      <div key={i} style={{ fontWeight: 600, marginBottom: 2 }}>{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</div>
+                      <div key={i} style={{ fontWeight: 600, marginBottom: 2 }}>{fmtTime(s.start_time)} - {fmtTime(s.end_time)}</div>
                     ))
                   )}
                 </td>
@@ -104,7 +104,7 @@ function DayTable({ day, shifts, employees, filterEmployee }) {
                     <span style={{ color: "#aaa", fontSize: 11 }}>OFF</span>
                   ) : (
                     dayShifts.map((s, i) => (
-                      <span key={i} style={{ fontWeight: 600, marginRight: 12 }}>{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</span>
+                      <span key={i} style={{ fontWeight: 600, marginRight: 12 }}>{fmtTime(s.start_time)} - {fmtTime(s.end_time)}</span>
                     ))
                   )}
                 </td>
@@ -196,8 +196,8 @@ export default function ExportSchedule({ weekStart, selectedDay, shifts, employe
   const renderHiddenTable = (filterEmployee) => {
     const day = selectedDay || weekStart;
     const title = isDayView
-      ? `Schedule: ${format(day, "EEEE, MMMM d, yyyy")}${filterEmployee ? ` — ${filterEmployee.name}` : ""}`
-      : `Schedule: ${format(weekStart, "MMM d")} – ${format(addDays(weekStart, 6), "MMM d, yyyy")}${filterEmployee ? ` — ${filterEmployee.name}` : ""}`;
+      ? `Schedule: ${format(day, "EEEE, MMMM d, yyyy")}${filterEmployee ? ` - ${filterEmployee.name}` : ""}`
+      : `Schedule: ${format(weekStart, "MMM d")} - ${format(addDays(weekStart, 6), "MMM d, yyyy")}${filterEmployee ? ` - ${filterEmployee.name}` : ""}`;
 
     return (
       <div ref={tableRef} style={{ position: "fixed", top: -9999, left: -9999, padding: 16, backgroundColor: "#fff" }}>

@@ -145,7 +145,27 @@ export default function Dashboard() {
 
   const updateShift = useMutation({
     mutationFn: ({ id, data }) => api.entities.Shift.update(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shifts"] }),
+    onMutate: async ({ id, data }) => {
+      // Cancel any in-flight refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["shifts"] });
+      // Snapshot current cache for rollback
+      const previousShifts = queryClient.getQueryData(["shifts"]);
+      // Immediately update the UI
+      queryClient.setQueryData(["shifts"], (old) =>
+        (old || []).map((s) => s.id === id ? { ...s, ...data } : s)
+      );
+      return { previousShifts };
+    },
+    onError: (_err, _vars, context) => {
+      // Server failed - roll back to what we had before
+      if (context?.previousShifts) {
+        queryClient.setQueryData(["shifts"], context.previousShifts);
+      }
+    },
+    onSettled: () => {
+      // Always re-sync with server once the mutation settles
+      queryClient.invalidateQueries({ queryKey: ["shifts"] });
+    },
   });
 
   const deleteShift = useMutation({
@@ -224,7 +244,7 @@ export default function Dashboard() {
     const payloads = entries.map(({ date, ...rest }) => ({ ...rest, start_date: date }));
 
     if (editId) {
-      // Editing: only one row at a time — update in place
+      // Editing: only one row at a time - update in place
       updateTimeOff.mutate({ id: editId, data: payloads[0] });
     } else {
       // Creating: bulk-insert all days at once (works for 1 or many)

@@ -36,7 +36,7 @@ export default function Login() {
         const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
 
-        // Check verification — try the API endpoint first (works on Vercel),
+        // Check verification - try the API endpoint first (works on Vercel),
         // fall back to user metadata if endpoint is unavailable (local dev).
         let verified = false;
         try {

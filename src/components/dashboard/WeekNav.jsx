@@ -38,7 +38,7 @@ export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext,
           <PopoverTrigger asChild>
             <button className="flex items-center gap-1 mx-1 text-center cursor-pointer hover:text-orange-500 transition-colors group" style={{ width: 200, flexShrink: 0, justifyContent: "center" }}>
               <span className="text-base font-semibold text-gray-900 group-hover:text-orange-500 transition-colors">
-                {format(currentWeekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
+                {format(currentWeekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-orange-500 transition-colors shrink-0" />
             </button>
@@ -66,7 +66,7 @@ export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext,
         </Button>
       </div>
 
-      {/* Week-level copy/clear dropdown — only shown in week view */}
+      {/* Week-level copy/clear dropdown - only shown in week view */}
       {!isDayView && (
         <div className="relative ml-1" ref={ref}>
           <button

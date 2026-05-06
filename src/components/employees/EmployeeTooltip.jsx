@@ -71,7 +71,7 @@ export default function EmployeeTooltip({ emp, children }) {
               <div className="flex justify-between gap-2">
                 <span className="text-gray-400">Min / Max</span>
                 <span className="text-gray-100">
-                  {emp.min_hours ?? "–"} / {emp.max_hours ?? "–"} hrs
+                  {emp.min_hours ?? "-"} / {emp.max_hours ?? "-"} hrs
                 </span>
               </div>
             </div>
@@ -88,7 +88,7 @@ export default function EmployeeTooltip({ emp, children }) {
                         <div className="flex flex-col gap-0.5">
                           {blocks.map((b, i) => (
                             <span key={i} className="text-gray-200">
-                              {fmtTime(b.start_time)} – {fmtTime(b.end_time)}
+                              {fmtTime(b.start_time)} - {fmtTime(b.end_time)}
                             </span>
                           ))}
                         </div>
