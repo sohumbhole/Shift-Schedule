@@ -123,12 +123,40 @@ Full implementation across 4 new files + 3 modified files.
 7. **deleteShift/deleteTimeOff/deleteEvent**: callers must pass `{ id, shift/timeOff/event: fullObject }` - the full object is needed to store in undo stack. mutationFn destructures only `{ id }`.
 8. **Supabase time_off**: DB column is `date` (confirmed from schema). Some code paths use `t.date || t.start_date` as a fallback for safety.
 
-## Next Steps (as of this session)
+## Undo/Redo Bug Fixes (2026-05-06)
 
-1. **Test undo/redo locally** - bug fixes just applied, test the move+delete+undo+undo sequence
-2. **Push to GitHub** after testing
-3. **Custom right-click context menu** - was discussed but not built. Show "Undo/Redo" + context-aware options (edit/delete shift when right-clicking a shift bar, add shift on empty timeline)
-4. **README**: Mention undo/redo shortcuts (Ctrl+Z / Ctrl+Shift+Z) in the README
+Three bugs found and fixed after initial undo/redo shipped:
+
+### Bug 1: Move/drag undo failing after delete+undo-delete
+**Root cause**: Supabase assigns a new UUID every time a row is recreated. When you undo a DELETE (shift comes back with a new ID), earlier stack entries (MOVE_SHIFT, ADD_SHIFT) still held the old UUID. Next Ctrl+Z tried `update(old_id)` → 404 → "Undo failed."
+
+**Fix - `patchId()` in `undoHistory.jsx`**: After any DELETE undo (or ADD redo) creates a new UUID, scan every entry on both stacks shallow-scanning `backward` and `forward` objects and replace the old UUID with the new one. Covered types:
+- Undo: `DELETE_SHIFT`, `DELETE_EVENT`, `DELETE_TIME_OFF`, `DELETE_EMPLOYEE`
+- Redo: `ADD_SHIFT`, `ADD_EVENT`, `ADD_EMPLOYEE`
+
+### Bug 2: Failed undo corrupted the stack, causing ghost shifts
+**Root cause**: When undo failed, the entry stayed on the redo stack. The next Ctrl+Z popped an unrelated earlier entry and applied it out of order, creating duplicate/phantom shifts.
+
+**Fix - `rollbackUndo()` / `rollbackRedo()` in `undoHistory.jsx`**: On failure, move the entry back to where it came from. Ctrl+Z always retries the same failed step - you cannot skip past it and undo earlier entries out of order. If the failure was transient (network blip), retrying naturally succeeds.
+
+### Bug 3: Ctrl+Shift+Z and Ctrl+Z broken on Windows / with Caps Lock
+**Root cause**: `e.key` is `"Z"` (uppercase) when Shift is held (Ctrl+Shift+Z) or Caps Lock is on. The old check `e.key === "z"` always failed in those cases.
+
+**Fix**: `e.key.toLowerCase()` before comparing. One line in `useUndoRedo.js`.
+
+### Security/edge case comment practice
+When a known limitation exists in the code that is safe today but could become a real bug if a future feature is added, write a comment in the code at the relevant location explaining: what the limitation is, why it's safe now, and exactly what must be fixed before the new feature ships. Don't just note it in CONTEXT.md - put it in the code where the future developer will be working. Example already in place: `ADD_TIME_OFF` case in `useUndoRedo.js` has a comment warning that `patchId()` does not deep-scan arrays (`backward.ids`), which is fine today because time-offs can't be moved/resized, but must be fixed before any "edit time off" feature is added.
+
+## Next Steps
+
+1. **Custom right-click context menu** - right-clicking a shift bar shows: Edit, Delete, Undo, Redo. Right-clicking empty timeline shows: Add Shift. Right-clicking an employee row shows context options. Replaces the need to hunt for buttons.
+2. **Notes feature** - mom wants to attach notes to many things. Proposed scope:
+   - Notes on individual shifts (e.g. "called in late", "cover needed")
+   - Notes on employees (e.g. "availability changed", "training notes")
+   - Notes on specific days (e.g. "holiday rush", "event catering")
+   - Needs a new `notes` table in Supabase: columns likely `id`, `user_id`, `note_type` (shift/employee/day), `ref_id` (foreign key to the relevant row, or null for day notes), `ref_date` (for day notes), `body`, `created_at`
+   - RLS on the table same as all other tables
+3. **README update** - document Ctrl+Z / Ctrl+Shift+Z shortcuts
 
 ## Conversations We Had (Key Decisions)
 
@@ -136,6 +164,7 @@ Full implementation across 4 new files + 3 modified files.
 - Decided employee edits are NOT undoable (editing modal = confirmed action)
 - Decided employee reorder is NOT undoable (keep it simple)
 - Employee delete IS undoable WITH cascade (solves "can't find all shifts to delete before undoing" problem by making delete itself cascade and storing everything)
+- Undo failure behavior: retry (Option A) chosen over burn-the-bridge (Option B). Reason: transient errors shouldn't destroy history; retrying is safe because API calls are atomic; the user cannot skip past a failed step.
 
 ## Credentials Location
 
