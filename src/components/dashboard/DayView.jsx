@@ -266,11 +266,19 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
     return () => clearInterval(id);
   }, []);
 
-  // Escape key exits day view, but only when no modal dialog is open.
-  // If a dialog is open (add shift, time off, etc.) it handles Escape itself first.
+  // Escape key exits day view, but only when:
+  // - no modal dialog is open (dialogs handle Escape themselves)
+  // - the browser is not in fullscreen.
+  //   document.fullscreenElement covers JS-triggered fullscreen.
+  //   window.outerHeight >= screen.height covers Safari native fullscreen
+  //   (green button / Cmd+Ctrl+F) which does NOT set document.fullscreenElement.
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === "Escape" && !document.querySelector('[role="dialog"]')) {
+      if (e.key === "Escape"
+        && !document.querySelector('[role="dialog"]')
+        && !document.fullscreenElement
+        && !document.webkitFullscreenElement
+        && window.outerHeight < screen.height) {
         onClose?.();
       }
     };
