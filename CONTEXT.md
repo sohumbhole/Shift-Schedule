@@ -151,15 +151,77 @@ Three bugs found and fixed after initial undo/redo shipped:
 ### Security/edge case comment practice
 When a known limitation exists in the code that is safe today but could become a real bug if a future feature is added, write a comment in the code at the relevant location explaining: what the limitation is, why it's safe now, and exactly what must be fixed before the new feature ships. Don't just note it in CONTEXT.md - put it in the code where the future developer will be working. Example already in place: `ADD_TIME_OFF` case in `useUndoRedo.js` has a comment warning that `patchId()` does not deep-scan arrays (`backward.ids`), which is fine today because time-offs can't be moved/resized, but must be fixed before any "edit time off" feature is added.
 
+## Session: 2026-05-06 (Notes Feature + UX Polish)
+
+### Weekly Notes (SHIPPED)
+
+New `DayNotesModal.jsx` component + wired into WeekNav top bar.
+
+**What it does:**
+- Notes button always visible in WeekNav (both week view and day view)
+- When a note is saved for the current week, button turns orange with PencilLine icon. Empty = blue with Pencil icon.
+- Modal: textarea with 2,000-char limit. Paste truncates to limit instead of blocking.
+- Live character counter turns red at limit.
+- Save / Delete / Cancel actions. Deleting removes the key from metadata entirely.
+- Shares the `["storeSettings"]` React Query cache - no extra network calls.
+
+**Database:**
+- Added `metadata jsonb NOT NULL DEFAULT '{}'` column to `store_settings` table.
+- SQL run in Supabase: safe 3-step pattern (add nullable -> backfill -> enforce NOT NULL).
+- Notes stored as: `metadata.week_notes["yyyy-MM-dd"] = "text"`
+- `StoreSettings.create` in `supabaseApi.js` always injects `metadata: {}` as fallback to prevent NOT NULL violation.
+- `supabase/migrations/001_initial_schema.sql` updated to reflect new column.
+
+**Files changed:**
+- `src/components/dashboard/DayNotesModal.jsx` - NEW
+- `src/components/dashboard/WeekNav.jsx` - Notes button + hasNote indicator
+- `src/api/supabaseApi.js` - metadata fallback on create
+- `supabase/migrations/001_initial_schema.sql` - metadata column added
+
+### Day View UX Polish (SHIPPED)
+
+- **"Week view" back button** moved from DayView inner header into WeekNav top bar (orange, always in same place). Prop: `onExitDayView` on WeekNav.
+- **Escape key exits day view**: `keydown` handler in DayView with two guards:
+  - `document.querySelector('[role="dialog"]')` - don't exit if a modal is open
+  - `document.fullscreenElement || document.webkitFullscreenElement` - Safari fullscreen check
+  - Note: Safari native fullscreen sometimes triggers Escape before the app sees it - known Mac quirk, not a code bug.
+- **Rotating hints** (top-right of DayView): cycles every 4 seconds between "Alt+drag to copy" and "Esc -> week view". Hidden on mobile (`hidden sm:block`).
+
+**Files changed:**
+- `src/components/dashboard/DayView.jsx`
+- `src/components/dashboard/WeekNav.jsx`
+- `src/pages/Dashboard.jsx` - `onExitDayView={() => setSelectedDay(null)}` prop added
+
+### Dashboard Subtitle - Week Total Hours (SHIPPED)
+
+- Subtitle now shows: `N employees - N shifts scheduled - X hrs this week`
+- Uses `isSameDay` (from date-fns) for date matching - same logic CalendarGrid uses per-employee
+- Handles midnight-crossing shifts: if `end <= start`, add 24*60 to end before subtracting
+- Computed as a clean variable (`weekTotalHours`) before the return statement, not an inline IIFE
+
+**File changed:** `src/pages/Dashboard.jsx`
+
+### Code Archive / Backup (2026-05-06 10:47 PM)
+
+A local archive snapshot of the full project was taken and tagged for this date/time. Stored separately from the repo. Purpose: safety net before major changes, not a replacement for git history.
+
+### Supabase Skill Created
+
+`~/.claude/skills/supabase/SKILL.md` - covers:
+- 3-step safe ADD COLUMN pattern (add nullable -> backfill -> enforce NOT NULL)
+- JSONB metadata bag pattern (top-level keys by feature)
+- `IF NOT EXISTS` idempotency
+- RLS safety when adding columns
+- Supabase AI assistant consultation tip before risky schema changes
+- Project ref `ituelwpduyuupmyhxhej` and where to find backup procedures
+
 ## Next Steps
 
 1. **Custom right-click context menu** - right-clicking a shift bar shows: Edit, Delete, Undo, Redo. Right-clicking empty timeline shows: Add Shift. Right-clicking an employee row shows context options. Replaces the need to hunt for buttons.
-2. **Notes feature** - mom wants to attach notes to many things. Proposed scope:
+2. **Notes expansion** - Week notes shipped. Future scope if mom wants more:
    - Notes on individual shifts (e.g. "called in late", "cover needed")
    - Notes on employees (e.g. "availability changed", "training notes")
-   - Notes on specific days (e.g. "holiday rush", "event catering")
-   - Needs a new `notes` table in Supabase: columns likely `id`, `user_id`, `note_type` (shift/employee/day), `ref_id` (foreign key to the relevant row, or null for day notes), `ref_date` (for day notes), `body`, `created_at`
-   - RLS on the table same as all other tables
+   - Day-level notes (separate key in metadata: `metadata.day_notes["yyyy-MM-dd"]`)
 3. **README update** - document Ctrl+Z / Ctrl+Shift+Z shortcuts
 
 ## Conversations We Had (Key Decisions)
