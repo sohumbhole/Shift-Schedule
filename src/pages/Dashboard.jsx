@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/api/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { startOfWeek, addWeeks, subWeeks, format, subDays, isSameDay } from "date-fns";
+import { startOfWeek, addWeeks, subWeeks, addDays, format, subDays, isSameDay } from "date-fns";
 import { useUndoHistory } from "@/lib/undoHistory";
 import { useDashboardNav } from "@/lib/dashboardNav";
 import WeekNav from "../components/dashboard/WeekNav";
@@ -576,13 +576,26 @@ export default function Dashboard() {
 
   const isLoading = loadingEmp || loadingShifts;
 
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekTotalHours = shifts
+    .filter(s => weekDays.some(d => isSameDay(new Date(s.date + "T00:00:00"), d)))
+    .reduce((sum, s) => {
+      const [sh, sm] = s.start_time.split(":").map(Number);
+      const [eh, em] = s.end_time.split(":").map(Number);
+      const start = sh * 60 + sm;
+      let end = eh * 60 + em;
+      if (end <= start) end += 24 * 60; // midnight wrap
+      return sum + (end - start) / 60;
+    }, 0);
+  const weekTotalHoursDisplay = weekTotalHours % 1 === 0 ? weekTotalHours : weekTotalHours.toFixed(1);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
           <p className="text-sm text-gray-400 mt-1">
-            {employees.length} employee{employees.length !== 1 ? "s" : ""} - {shifts.length} shift{shifts.length !== 1 ? "s" : ""} scheduled
+            {employees.length} employee{employees.length !== 1 ? "s" : ""} - {shifts.length} shift{shifts.length !== 1 ? "s" : ""} scheduled - {weekTotalHoursDisplay} hrs this week
           </p>
         </div>
       </div>
