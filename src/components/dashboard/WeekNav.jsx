@@ -142,21 +142,19 @@ export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext,
         </div>
       )}
 
-      {/* Notes button - week view only. Orange = note saved this week, blue = empty. */}
-      {!isDayView && (
-        <button
-          onClick={() => setNotesOpen(true)}
-          title={hasNote ? "Week notes (saved)" : "Week notes"}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all text-sm font-medium ${
-            hasNote
-              ? "border-orange-400 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:border-orange-500"
-              : "border-blue-400 text-blue-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-500"
-          }`}
-        >
-          {hasNote ? <PencilLine className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
-          <span className="hidden sm:inline">Notes</span>
-        </button>
-      )}
+      {/* Notes button - always visible in both week and day view */}
+      <button
+        onClick={() => setNotesOpen(true)}
+        title={hasNote ? "Week notes (saved)" : "Week notes"}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all text-sm font-medium ${
+          hasNote
+            ? "border-orange-400 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:border-orange-500"
+            : "border-blue-400 text-blue-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-500"
+        }`}
+      >
+        {hasNote ? <PencilLine className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+        <span className="hidden sm:inline">Notes</span>
+      </button>
 
       {/* Spacer */}
       <div className="flex-1" />

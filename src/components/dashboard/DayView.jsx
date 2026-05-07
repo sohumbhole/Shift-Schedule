@@ -1,9 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { format, isSameDay, isToday, startOfWeek } from "date-fns";
-import { Plus, ChevronLeft, ChevronRight, Copy, ChevronDown, Trash2, GripVertical, CalendarOff, Award, Pencil, PencilLine } from "lucide-react";
+import { format, isSameDay, isToday } from "date-fns";
+import { Plus, ChevronLeft, ChevronRight, Copy, ChevronDown, Trash2, GripVertical, CalendarOff, Award } from "lucide-react";
 import EmployeeTooltip from "@/components/employees/EmployeeTooltip";
 import ExportScreenshot from "@/components/dashboard/ExportScreenshot";
-import DayNotesModal from "@/components/dashboard/DayNotesModal";
 import EventsRow from "@/components/events/EventsRow";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { createPageUrl } from "@/utils";
@@ -258,12 +257,26 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
   const navigate = useNavigate();
   const [dayMenuOpen, setDayMenuOpen] = useState(false);
   const [confirmClearDay, setConfirmClearDay] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
 
-  // Derive week start for notes keying - storeSettings comes in as a prop from Dashboard
-  const weekStart = startOfWeek(day, { weekStartsOn: 1 });
-  const weekKey = format(weekStart, "yyyy-MM-dd");
-  const hasNote = !!(storeSettings?.metadata?.week_notes?.[weekKey]);
+  // Rotating hints shown in the top-right of the day view header
+  const hints = ["Alt+drag to copy", "Esc \u2192 week view"];
+  const [hintIndex, setHintIndex] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setHintIndex((i) => (i + 1) % hints.length), 4000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Escape key exits day view, but only when no modal dialog is open.
+  // If a dialog is open (add shift, time off, etc.) it handles Escape itself first.
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === "Escape" && !document.querySelector('[role="dialog"]')) {
+        onClose?.();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
   const dayMenuRef = useRef(null);
 
   useEffect(() => {
@@ -633,20 +646,6 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
              </div>
            )}
           </div>
-
-          {/* Notes button - day view, same week-level notes as week view */}
-          <button
-            onClick={() => setNotesOpen(true)}
-            title={hasNote ? "Week notes (saved)" : "Week notes"}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all text-sm font-medium ${
-              hasNote
-                ? "border-orange-400 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:border-orange-500"
-                : "border-blue-400 text-blue-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-500"
-            }`}
-          >
-            {hasNote ? <PencilLine className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">Notes</span>
-          </button>
           </div>
           <div className="flex items-center gap-3 text-sm text-gray-500">
           <span><strong className="text-gray-800">{totalShiftCount}</strong> shift{totalShiftCount !== 1 ? "s" : ""}</span>
@@ -657,7 +656,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
           >
             + Time Off
           </button>
-          <span className="text-xs text-gray-400 hidden sm:block">Alt+drag to copy</span>
+          <span className="text-xs text-gray-400 hidden sm:block transition-all">{hints[hintIndex]}</span>
         </div>
       </div>
 
@@ -912,7 +911,6 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
         </div>
       </div>
 
-      <DayNotesModal open={notesOpen} onClose={() => setNotesOpen(false)} weekStart={weekStart} />
     </div>
   );
 }
