@@ -125,7 +125,7 @@ Full implementation across 4 new files + 3 modified files.
 
 ## Next Steps (as of this session)
 
-1. **Test undo/redo locally** - it was just coded and hasn't been tested yet
+1. **Test undo/redo locally** - bug fixes just applied, test the move+delete+undo+undo sequence
 2. **Push to GitHub** after testing
 3. **Custom right-click context menu** - was discussed but not built. Show "Undo/Redo" + context-aware options (edit/delete shift when right-clicking a shift bar, add shift on empty timeline)
 4. **README**: Mention undo/redo shortcuts (Ctrl+Z / Ctrl+Shift+Z) in the README

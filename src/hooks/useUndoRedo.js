@@ -70,6 +70,18 @@ async function applyEntry(entry, direction, { queryClient, dashboardNav, navigat
     }
 
     case "ADD_TIME_OFF": {
+      // NOTE FOR FUTURE FEATURE - READ THIS before adding "edit time off" (move/resize):
+      // patchId() does a shallow scan of entry.backward and entry.forward objects.
+      // ADD_TIME_OFF stores multiple IDs as an array: backward.ids = [id1, id2, ...].
+      // A shallow scan won't find individual IDs nested inside that array, so if a
+      // DELETE_TIME_OFF undo ever recreates a row with a new UUID, the stale old UUID
+      // inside backward.ids will NOT get patched automatically.
+      // Right now this is harmless because time-offs can't be moved/resized - there is
+      // no MOVE_TIME_OFF operation that would reference those IDs later.
+      // BUT: if you add an "edit time off" feature (change start/end time after creation),
+      // you MUST also extend patchId() to deep-scan arrays inside backward/forward, or
+      // ADD_TIME_OFF undo will silently try to delete stale IDs and fail (or worse,
+      // delete the wrong row if IDs ever collide).
       if (direction === "backward") {
         // backward.ids is an array of IDs to delete
         for (const id of data.ids) await api.entities.TimeOff.delete(id);
@@ -311,22 +323,45 @@ export function useUndoRedo({ showToast }) {
         if (!h.canUndo) return;
         const entry = h.undo();
         if (!entry) return;
+        // Capture the forward ID before applyEntry mutates it (DELETE undo recreates
+        // the row and writes a new UUID into entry.forward.id)
+        const prevForwardId = ["DELETE_SHIFT", "DELETE_EVENT", "DELETE_TIME_OFF", "DELETE_EMPLOYEE"].includes(entry.type)
+          ? entry.forward?.id
+          : undefined;
         try {
           await applyEntry(entry, "backward", { queryClient: qc, dashboardNav: dnav, navigate: nav, location: loc });
+          // If a new UUID was assigned, patch every other stack entry that still
+          // holds the old UUID so future undo/redo operations use the correct ID.
+          if (prevForwardId !== undefined && entry.forward?.id !== prevForwardId) {
+            h.patchId(prevForwardId, entry.forward.id);
+          }
           toast({ message: `Undid: ${entry.description}`, isRedo: false });
         } catch (err) {
           console.error("Undo failed:", err);
+          // Roll the entry back so the stack stays consistent - future Ctrl+Z
+          // won't skip over unrelated operations.
+          h.rollbackUndo();
           toast({ message: "Undo failed", isRedo: false });
         }
       } else {
         if (!h.canRedo) return;
         const entry = h.redo();
         if (!entry) return;
+        // Capture the backward ID before applyEntry mutates it (ADD redo recreates
+        // the row and writes a new UUID into entry.backward.id)
+        const prevBackwardId = ["ADD_SHIFT", "ADD_EVENT", "ADD_EMPLOYEE"].includes(entry.type)
+          ? entry.backward?.id
+          : undefined;
         try {
           await applyEntry(entry, "forward", { queryClient: qc, dashboardNav: dnav, navigate: nav, location: loc });
+          // Patch stale IDs if redo re-created a row with a new UUID.
+          if (prevBackwardId !== undefined && entry.backward?.id !== prevBackwardId) {
+            h.patchId(prevBackwardId, entry.backward.id);
+          }
           toast({ message: `Redid: ${entry.description}`, isRedo: true });
         } catch (err) {
           console.error("Redo failed:", err);
+          h.rollbackRedo();
           toast({ message: "Redo failed", isRedo: true });
         }
       }
