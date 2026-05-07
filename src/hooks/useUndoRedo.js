@@ -311,8 +311,9 @@ export function useUndoRedo({ showToast }) {
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
 
-      const isUndo = e.key === "z" && !e.shiftKey;
-      const isRedo = (e.key === "z" && e.shiftKey) || e.key === "y";
+      const key = e.key.toLowerCase();
+      const isUndo = key === "z" && !e.shiftKey;
+      const isRedo = (key === "z" && e.shiftKey) || key === "y";
       if (!isUndo && !isRedo) return;
 
       e.preventDefault();
