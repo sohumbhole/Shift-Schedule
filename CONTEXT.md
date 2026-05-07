@@ -112,6 +112,10 @@ Full implementation across 4 new files + 3 modified files.
 
 **ID tracking**: After undo of a create (which deletes the item), a redo re-creates it and gets a new UUID from DB. The entry object is mutated in place to update the stored ID so future undo/redo stays in sync.
 
+## Workflow Rules
+
+1. **Always local first, never push without explicit permission.** Every feature is tested on localhost before pushing to GitHub/Vercel. Never push unless Sohum explicitly says "push it" or "push to GitHub". This applies even if the change looks obviously correct.
+
 ## Important Patterns / Lessons Learned
 
 1. **No em dashes anywhere** - user is strict about this. Regular hyphen (-) only.

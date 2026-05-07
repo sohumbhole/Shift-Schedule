@@ -9,7 +9,7 @@ import { api } from "@/api/api";
 import ExportSchedule from "./ExportSchedule";
 import DayNotesModal from "./DayNotesModal";
 
-export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext, onToday, isDayView, onCopyPreviousWeek, shifts, employees, onClearWeek, onNavigateToWeek, onNavigateToDay }) {
+export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext, onToday, isDayView, onCopyPreviousWeek, shifts, employees, onClearWeek, onNavigateToWeek, onNavigateToDay, onExitDayView }) {
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
   const [open, setOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -38,6 +38,15 @@ export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext,
 
   return (
     <div className="flex items-center gap-3 w-full">
+      {isDayView && (
+        <button
+          onClick={onExitDayView}
+          className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors shrink-0"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+          Week view
+        </button>
+      )}
       <Button variant="outline" size="sm" onClick={onToday} className="text-sm font-medium">
         Today
       </Button>

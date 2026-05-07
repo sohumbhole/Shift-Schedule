@@ -612,6 +612,7 @@ export default function Dashboard() {
             employees={employees}
             onNavigateToWeek={setWeekStart}
             onNavigateToDay={setSelectedDay}
+            onExitDayView={() => setSelectedDay(null)}
           />
         </div>
         {isReorderMode ? (
