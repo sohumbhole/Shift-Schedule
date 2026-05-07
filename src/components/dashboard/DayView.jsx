@@ -894,6 +894,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
           )}
         </div>
       </div>
+
     </div>
   );
 }

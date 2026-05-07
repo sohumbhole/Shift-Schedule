@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, ChevronDown, Copy, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Copy, Trash2, Pencil } from "lucide-react";
 import { format, endOfWeek, startOfWeek } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ExportSchedule from "./ExportSchedule";
+import DayNotesModal from "./DayNotesModal";
 
 export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext, onToday, isDayView, onCopyPreviousWeek, shifts, employees, onClearWeek, onNavigateToWeek, onNavigateToDay }) {
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
   const [open, setOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -121,6 +123,18 @@ export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext,
         </div>
       )}
 
+      {/* Notes button - week view only */}
+      {!isDayView && (
+        <button
+          onClick={() => setNotesOpen(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-blue-400 text-blue-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-500 transition-all text-sm font-medium"
+          title="Week notes"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Notes</span>
+        </button>
+      )}
+
       {/* Spacer */}
       <div className="flex-1" />
 
@@ -132,6 +146,8 @@ export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext,
         employees={employees}
         isDayView={isDayView}
       />
+
+      <DayNotesModal open={notesOpen} onClose={() => setNotesOpen(false)} weekStart={currentWeekStart} />
     </div>
   );
 }

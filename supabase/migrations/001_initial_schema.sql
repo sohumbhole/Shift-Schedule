@@ -110,6 +110,13 @@ CREATE TABLE IF NOT EXISTS public.store_settings (
   sunday_open text,
   sunday_close text,
   employee_order jsonb DEFAULT '[]',
+  -- Flexible extension bag for future features without schema changes.
+  -- Top-level keys are namespaced by feature:
+  --   week_notes: { "yyyy-MM-dd": "text" }  (keyed by week Monday date)
+  --   day_notes:  { "yyyy-MM-dd": "text" }  (future)
+  -- Migration: added via 3-step ALTER (add nullable -> backfill -> NOT NULL).
+  -- No column DEFAULT in Postgres - always pass metadata: {} on INSERT.
+  metadata jsonb NOT NULL,
   created_at timestamptz DEFAULT now()
 );
 

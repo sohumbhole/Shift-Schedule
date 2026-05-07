@@ -190,9 +190,11 @@ export const supabaseApi = {
       },
       create: async (payload) => {
         const user_id = await getUserId();
+        // metadata is NOT NULL with no column default - always provide a fallback
+        // so callers that don't pass metadata don't get a NOT NULL violation.
         const { data, error } = await supabase
           .from('store_settings')
-          .insert({ ...payload, user_id })
+          .insert({ metadata: {}, ...payload, user_id })
           .select()
           .single();
         if (error) throw error;
