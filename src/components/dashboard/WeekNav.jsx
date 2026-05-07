@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, ChevronDown, Copy, Trash2, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Copy, Trash2, Pencil, PencilLine } from "lucide-react";
 import { format, endOfWeek, startOfWeek } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/api/api";
 import ExportSchedule from "./ExportSchedule";
 import DayNotesModal from "./DayNotesModal";
 
@@ -14,6 +16,14 @@ export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext,
   const [calOpen, setCalOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const ref = useRef(null);
+
+  // Check if there's a saved note for the current week (uses shared cache)
+  const { data: storeSettings = [] } = useQuery({
+    queryKey: ["storeSettings"],
+    queryFn: () => api.entities.StoreSettings.list(),
+  });
+  const weekKey = format(currentWeekStart, "yyyy-MM-dd");
+  const hasNote = !!(storeSettings[0]?.metadata?.week_notes?.[weekKey]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -123,14 +133,18 @@ export default function WeekNav({ currentWeekStart, selectedDay, onPrev, onNext,
         </div>
       )}
 
-      {/* Notes button - week view only */}
+      {/* Notes button - week view only. Orange = note saved this week, blue = empty. */}
       {!isDayView && (
         <button
           onClick={() => setNotesOpen(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-blue-400 text-blue-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-500 transition-all text-sm font-medium"
-          title="Week notes"
+          title={hasNote ? "Week notes (saved)" : "Week notes"}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all text-sm font-medium ${
+            hasNote
+              ? "border-orange-400 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:border-orange-500"
+              : "border-blue-400 text-blue-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-500"
+          }`}
         >
-          <Pencil className="w-3.5 h-3.5" />
+          {hasNote ? <PencilLine className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
           <span className="hidden sm:inline">Notes</span>
         </button>
       )}
