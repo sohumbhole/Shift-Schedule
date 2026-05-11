@@ -590,16 +590,18 @@ export default function Dashboard() {
   const isLoading = loadingEmp || loadingShifts;
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const weekTotalHours = shifts
-    .filter(s => weekDays.some(d => isSameDay(new Date(s.date + "T00:00:00"), d)))
-    .reduce((sum, s) => {
-      const [sh, sm] = s.start_time.split(":").map(Number);
-      const [eh, em] = s.end_time.split(":").map(Number);
-      const start = sh * 60 + sm;
-      let end = eh * 60 + em;
-      if (end <= start) end += 24 * 60; // midnight wrap
-      return sum + (end - start) / 60;
-    }, 0);
+  // weekShifts is filtered to the currently viewed week - used for both shift count and hours.
+  // shifts (from React Query) contains ALL historical shifts with no date filter, so using
+  // shifts.length directly would show all-time counts instead of this week only.
+  const weekShifts = shifts.filter(s => weekDays.some(d => isSameDay(new Date(s.date + "T00:00:00"), d)));
+  const weekTotalHours = weekShifts.reduce((sum, s) => {
+    const [sh, sm] = s.start_time.split(":").map(Number);
+    const [eh, em] = s.end_time.split(":").map(Number);
+    const start = sh * 60 + sm;
+    let end = eh * 60 + em;
+    if (end <= start) end += 24 * 60; // midnight wrap
+    return sum + (end - start) / 60;
+  }, 0);
   const weekTotalHoursDisplay = weekTotalHours % 1 === 0 ? weekTotalHours : weekTotalHours.toFixed(1);
 
   return (
@@ -608,7 +610,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
           <p className="text-sm text-gray-400 mt-1">
-            {employees.length} employee{employees.length !== 1 ? "s" : ""} - {shifts.length} shift{shifts.length !== 1 ? "s" : ""} scheduled - {weekTotalHoursDisplay} hrs this week
+            {employees.length} employee{employees.length !== 1 ? "s" : ""} - {weekShifts.length} shift{weekShifts.length !== 1 ? "s" : ""} this week - {weekTotalHoursDisplay} hrs this week
           </p>
         </div>
       </div>
