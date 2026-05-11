@@ -327,11 +327,21 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
     };
     const openMins = timeToMinutes(storeHours.open);
     let closeMins = timeToMinutes(storeHours.close);
-    if (closeMins <= openMins) closeMins += 24 * 60;
+    const storeIsOvernight = closeMins <= openMins;
+    if (storeIsOvernight) closeMins += 24 * 60;
 
-    const startMins = timeToMinutes(startTime);
+    let startMins = timeToMinutes(startTime);
     let endMins = timeToMinutes(endTime);
     if (endMins <= startMins) endMins += 24 * 60;
+
+    // For overnight stores, a shift starting after midnight (e.g. 00:00-03:00) has
+    // startMins = 0, which is numerically less than openMins (e.g. 1200 for 8pm) even
+    // though midnight is within store hours. Detect this and shift both endpoints by +24h
+    // so they compare correctly against the wrapped closeMins.
+    if (storeIsOvernight && startMins < openMins && startMins + 24 * 60 <= closeMins) {
+      startMins += 24 * 60;
+      endMins += 24 * 60;
+    }
 
     if (startMins < openMins || endMins > closeMins) {
       closedWarning = `Shift must be within store hours (${fmt(storeHours.open)} - ${fmt(storeHours.close)}).`;

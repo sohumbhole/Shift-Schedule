@@ -76,6 +76,12 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
   let startMinsAbs = timeToMinutes(shift.start_time);
   let endMinsAbs = timeToMinutes(shift.end_time);
   if (endMinsAbs <= startMinsAbs) endMinsAbs += 24 * 60;
+  // If the shift starts before the timeline's start hour (early-morning on an overnight timeline),
+  // shift both endpoints by +24h so the bar renders in the extended portion of the timeline.
+  if (startMinsAbs < startHour * 60) {
+    startMinsAbs += 24 * 60;
+    endMinsAbs += 24 * 60;
+  }
 
   const displayStart = liveStart !== null ? liveStart : startMinsAbs;
   const displayEnd = liveEnd !== null ? liveEnd : endMinsAbs;
@@ -298,7 +304,23 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
     return () => document.removeEventListener("mousedown", handler);
   }, []);
   const dayShifts = shifts.filter((s) => isSameDay(new Date(s.date + "T00:00:00"), day));
-  const { startHour, endHour } = getHourRange(day, storeSettings);
+  let { startHour, endHour } = getHourRange(day, storeSettings);
+  // Extend the timeline to cover any shifts that fall outside the store-hours range.
+  // This handles midnight-crossing shifts (e.g. 10pm-2am) when the default range ends at 10pm.
+  for (const s of dayShifts) {
+    const sStart = timeToMinutes(s.start_time);
+    let sEnd = timeToMinutes(s.end_time);
+    if (sEnd <= sStart) sEnd += 24 * 60;
+    if (sStart < startHour * 60) {
+      // Shift is in the early-morning "next day" zone relative to the timeline start.
+      // Compute its endpoint as an offset from the timeline origin (+24h).
+      const adjustedEndHour = Math.ceil((sEnd + 24 * 60) / 60);
+      if (adjustedEndHour > endHour) endHour = adjustedEndHour;
+    } else {
+      if (Math.floor(sStart / 60) < startHour) startHour = Math.floor(sStart / 60);
+      if (Math.ceil(sEnd / 60) > endHour) endHour = Math.ceil(sEnd / 60);
+    }
+  }
   const totalMinutes = (endHour - startHour) * 60;
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
 
@@ -349,6 +371,11 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
     let startMinsAbs = timeToMinutes(shift.start_time);
     let endMinsAbs = timeToMinutes(shift.end_time);
     if (endMinsAbs <= startMinsAbs) endMinsAbs += 24 * 60;
+    // Mirror the ShiftBar adjustment: next-day shifts must be offset by +24h for correct ghost placement.
+    if (startMinsAbs < startHour * 60) {
+      startMinsAbs += 24 * 60;
+      endMinsAbs += 24 * 60;
+    }
     const dur = endMinsAbs - startMinsAbs;
 
     // Snapshot row rects for hit-testing

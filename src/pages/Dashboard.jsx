@@ -242,8 +242,18 @@ export default function Dashboard() {
   // Caller must pass { id, shift: fullObject }
   const deleteShift = useMutation({
     mutationFn: ({ id }) => api.entities.Shift.delete(id),
+    onMutate: async ({ id }) => {
+      await queryClient.cancelQueries({ queryKey: ["shifts"] });
+      const previousShifts = queryClient.getQueryData(["shifts"]);
+      queryClient.setQueryData(["shifts"], (old) => (old || []).filter((s) => s.id !== id));
+      return { previousShifts };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousShifts) {
+        queryClient.setQueryData(["shifts"], context.previousShifts);
+      }
+    },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["shifts"] });
       const s = variables.shift;
       if (!s) return;
       history.push({
@@ -262,6 +272,9 @@ export default function Dashboard() {
         },
         forward: { id: s.id },
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["shifts"] });
     },
   });
 
