@@ -34,7 +34,7 @@ The `.env.local` file is already set up with the correct Supabase URL and anon k
 
 Supabase project: `ituelwpduyuupmyhxhej`
 Tables: `employees`, `shifts`, `time_off`, `events`, `store_settings`
-- `time_off` table uses `date` column (not `start_date` - the supabaseApi.js has a minor inconsistency where it orders by `start_date` but the schema column is `date`)
+- `time_off` table uses `start_date` column (NOT `date` - the migration file 001_initial_schema.sql says `date` but the live DB was created with `start_date`. All code uses `start_date`. The `t.date || t.start_date` fallback pattern is for safety only.)
 - All tables protected by RLS - user_id must match auth.uid()
 
 Backups stored at: `/Users/sohumbhole/Documents/shift schedule database backups/`

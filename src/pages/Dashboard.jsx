@@ -372,9 +372,8 @@ export default function Dashboard() {
   };
 
   const handleSaveTimeOff = async (entries, editId) => {
-    // entries is always an array of single-day payloads (no end_date)
-    // Map UI 'date' field to 'date' for DB storage
-    const payloads = entries.map(({ date, ...rest }) => ({ ...rest, date }));
+    // entries is always an array of single-day payloads from TimeOffModal
+    const payloads = entries;
 
     if (editId) {
       // Editing existing time off - not tracked on the undo stack

@@ -81,7 +81,7 @@ export default function TimeOffModal({ open, onClose, date, employee, employees,
       return {
         employee_id: form.employee_id,
         employee_name: emp?.name || "",
-        date: dayStr,
+        start_date: dayStr,
         type: form.type,
         full_day: form.full_day,
         start_time: form.full_day ? storeOpen : form.start_time,

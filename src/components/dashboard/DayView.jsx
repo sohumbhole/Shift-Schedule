@@ -742,7 +742,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                         if (end <= start) end += 24 * 60;
                         return sum + Math.max(0, (end - start) / 60);
                       }, 0);
-                      const empTimeOffs = timeOffs.filter((t) => t.employee_id === emp.id && isSameDay(new Date(t.date + "T00:00:00"), day));
+                      const empTimeOffs = timeOffs.filter((t) => t.employee_id === emp.id && isSameDay(new Date((t.start_date || t.date) + "T00:00:00"), day));
                       return (
                         <Draggable key={emp.id} draggableId={emp.id} index={idx}>
                           {(provided, snapshot) => (
