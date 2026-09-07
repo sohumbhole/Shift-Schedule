@@ -1,13 +1,15 @@
-// READ-ONLY per-user (or all-user) Supabase backup. No Docker, no DB password.
+// READ-ONLY full Supabase backup. No Docker, no DB password.
+// Always backs up EVERY user - there is nothing to target and no argument to pass.
+//
 // Reads the LIVE schema every run (never trusts the migration file) and backs up
 // every table that has a user_id column, using SELECT * so column drift is captured.
 //
 // Usage:
-//   node _backup_user.mjs someone@example.com            # one user by email
-//   node _backup_user.mjs <user-uuid>                     # one user by UUID
-//   node _backup_user.mjs --all                           # every user
+//   node _backup_user.mjs
 //
-// Secrets come from .env.local and are never printed. Output goes OUTSIDE the repo.
+// Secrets come from .env.local and are never printed. Output goes OUTSIDE the repo:
+// $BACKUP_OUT_DIR/backup-<timestamp>/ if that env var is set (the scheduled task sets
+// it), otherwise the parent folder of the repo.
 
 import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
@@ -23,11 +25,7 @@ const URL = env.VITE_SUPABASE_URL;
 const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !KEY) { console.error('Missing VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local'); process.exit(1); }
 
-const arg = process.argv[2];
-if (!arg) { console.error('Usage: node _backup_user.mjs <email | user-uuid | --all>'); process.exit(1); }
-
 const supabase = createClient(URL, KEY, { auth: { autoRefreshToken: false, persistSession: false } });
-const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
 // ---- 1. discover LIVE schema: which tables have a user_id column ----
 async function discoverUserTables() {
@@ -42,7 +40,7 @@ async function discoverUserTables() {
   return { withUserId, withoutUserId };
 }
 
-// ---- 2. resolve which user(s) to back up ----
+// ---- 2. every auth user, paged ----
 async function listAllUsers() {
   const users = [];
   for (let page = 1; ; page++) {
@@ -54,22 +52,10 @@ async function listAllUsers() {
   return users;
 }
 
-async function resolveTargets() {
-  if (arg === '--all') return (await listAllUsers()).map(u => ({ id: u.id, email: u.email, user: u }));
-  if (isUuid(arg)) {
-    const { data, error } = await supabase.auth.admin.getUserById(arg);
-    if (error) throw error;
-    return [{ id: arg, email: data.user?.email, user: data.user }];
-  }
-  const match = (await listAllUsers()).find(u => (u.email || '').toLowerCase() === arg.toLowerCase());
-  if (!match) { console.error(`No auth user found with email ${arg}`); process.exit(1); }
-  return [{ id: match.id, email: match.email, user: match }];
-}
-
 // ---- 3. back up one user across all discovered tables ----
 async function backupUser(target, tables, rootDir) {
-  const safeEmail = (target.email || target.id).replace(/[^a-z0-9._@-]/gi, '_');
-  const dir = path.join(rootDir, safeEmail);
+  const folder = (target.email || target.id).replace(/[^a-z0-9._@-]/gi, '_');
+  const dir = path.join(rootDir, folder);
   fs.mkdirSync(dir, { recursive: true });
   const summary = { user_id: target.id, email: target.email, tables: {} };
 
@@ -90,9 +76,10 @@ const { withUserId, withoutUserId } = await discoverUserTables();
 console.log('Live tables WITH user_id (will back up):', withUserId.join(', '));
 if (withoutUserId.length) console.log('Tables WITHOUT user_id (skipped - review manually if new):', withoutUserId.join(', '));
 
-const targets = await resolveTargets();
+const targets = (await listAllUsers()).map((u) => ({ id: u.id, email: u.email, user: u }));
+console.log(`Users to back up: ${targets.length}`);
+
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-// Output base: BACKUP_OUT_DIR env var if set (used by the scheduled task), else the parent of the repo.
 const outBase = process.env.BACKUP_OUT_DIR ? path.resolve(process.env.BACKUP_OUT_DIR) : path.resolve('..');
 const rootDir = path.join(outBase, `backup-${stamp}`);
 fs.mkdirSync(rootDir, { recursive: true });

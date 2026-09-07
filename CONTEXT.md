@@ -251,8 +251,11 @@ Supabase Free takes no automatic backups, so a Windows Task Scheduler job "Supab
 runs a full backup of all users every Monday 1 AM to `..\Backups\backup-<timestamp>\` (one folder
 per user, plus a manifest). It runs on battery, wakes from sleep, and catches up on next wake if
 missed. Helper scripts in the repo root (they read secrets from `.env.local`, never print them):
-- `_backup_user.mjs` - backs up one user (by email or UUID) or `--all`. Reads the LIVE schema each
-  run via the PostgREST OpenAPI spec, so column drift is captured; uses `SELECT *`.
+- `_backup_user.mjs` - backs up EVERY user. It takes no arguments and has no way to target a
+  single person (simplified 2026-09-07; it previously accepted an email or UUID). Reads the LIVE
+  schema each run via the PostgREST OpenAPI spec, so column drift is captured; uses `SELECT *`.
+  Backup folders are still named by the account email, which is read from the DB at run time, so
+  a restore can tell whose data is whose.
 - `_discover_schema.mjs` - prints the live public tables and columns.
 - `_run_weekly_backup.cmd` - wrapper the scheduled task runs.
 No Supabase Storage buckets exist, so there are no files to download beyond DB rows (re-check
