@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS public.shifts (
   start_time text NOT NULL,
   end_time text NOT NULL,
   color text,
+  -- Tentative/backup shift: excluded from hours totals, shown as an outline in the UI.
+  -- Optional flag, defaults to false (a normal, counted shift).
+  -- Migration on existing DBs (safe, additive, idempotent):
+  --   ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS tentative boolean NOT NULL DEFAULT false;
+  tentative boolean NOT NULL DEFAULT false,
   created_at timestamptz DEFAULT now()
 );
 

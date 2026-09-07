@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     // 3. Send email via SendGrid
     const msg = {
       to: email,
-      from: 'noreply@shift-schedule.app',
+      from: 'sohumbhole@gmail.com', // same verified sender signup uses (noreply@shift-schedule.app was likely unverified)
       subject: 'Reset your Shift Schedule password',
       text: `Click this link to reset your password: ${resetUrl}`,
       html: `

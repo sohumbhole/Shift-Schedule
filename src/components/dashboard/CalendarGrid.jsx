@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { format, addDays, isToday, isSameDay } from "date-fns";
-import { Plus, UserPlus, Calendar, Clock, GripVertical, CalendarOff, Award } from "lucide-react";
+import { Plus, UserPlus, Calendar, Clock, GripVertical, CalendarOff, Award, Ban } from "lucide-react";
 import EmployeeTooltip from "@/components/employees/EmployeeTooltip";
 import EventsRow from "@/components/events/EventsRow";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
@@ -21,18 +21,19 @@ function fmtTime(t) {
 
 function ShiftPill({ shift, onClick }) {
   const color = shift.color || "#FF8C00";
+  const isTentative = !!shift.tentative;
   const dur = timeToMinutes(shift.end_time) - timeToMinutes(shift.start_time);
   const hrs = dur / 60;
 
   return (
     <div
       onClick={(e) => { e.stopPropagation(); onClick(shift); }}
-      className="rounded-md px-2 py-1 cursor-pointer hover:brightness-95 transition-all group relative text-white text-xs font-semibold shadow-sm select-none"
-      style={{ backgroundColor: color }}
-      title={`${shift.employee_name}: ${fmtTime(shift.start_time)} - ${fmtTime(shift.end_time)} (${hrs.toFixed(1)}h)`}
+      className={"rounded-md px-2 py-1 cursor-pointer hover:brightness-95 transition-all group relative text-xs font-semibold shadow-sm select-none " + (isTentative ? "text-gray-900" : "text-white")}
+      style={isTentative ? { backgroundColor: "#fff", border: `2px solid ${color}` } : { backgroundColor: color }}
+      title={`${shift.employee_name}: ${fmtTime(shift.start_time)} - ${fmtTime(shift.end_time)} (${hrs.toFixed(1)}h)${isTentative ? " - backup (not counted)" : ""}`}
     >
       <div className="font-semibold truncate">{fmtTime(shift.start_time)} - {fmtTime(shift.end_time)}</div>
-      <div className="text-[10px] opacity-80 font-normal truncate">{shift.employee_name.split(" ")[0]}</div>
+      <div className={"text-[10px] font-normal truncate " + (isTentative ? "text-gray-500" : "opacity-80")}>{shift.employee_name.split(" ")[0]}</div>
     </div>
   );
 }
@@ -41,6 +42,10 @@ const TIME_OFF_STYLES = {
   regular_off: { bg: "bg-blue-100", border: "border-blue-300", text: "text-blue-700", label: "Day Off" },
   custom_time_off: { bg: "bg-red-100", border: "border-red-300", text: "text-red-600", label: "Time Off" },
 };
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+// Subtle diagonal hatch used to flag days where an employee has unavailability.
+const UNAVAIL_HATCH = "repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(0,0,0,0.06) 4px, rgba(0,0,0,0.06) 8px)";
 
 function TimeOffPill({ timeOff, onClick }) {
   const style = TIME_OFF_STYLES[timeOff.type] || TIME_OFF_STYLES.regular_off;
@@ -73,6 +78,7 @@ export default function CalendarGrid({ weekStart, shifts, timeOffs = [], events 
   const EmployeeRow = ({ emp, index, isDragging }) => {
     const empShifts = shifts.filter((s) => s.employee_id === emp.id && days.some((d) => isSameDay(new Date(s.date + "T00:00:00"), d)));
     const totalHrs = empShifts.reduce((sSum, s) => {
+      if (s.tentative) return sSum; // backup shifts do not count toward hours
       const [sh, sm] = s.start_time.split(":").map(Number);
       const [eh, em] = s.end_time.split(":").map(Number);
       const start = sh * 60 + sm;
@@ -154,14 +160,27 @@ export default function CalendarGrid({ weekStart, shifts, timeOffs = [], events 
         {/* Day cells */}
         {days.map((day) => {
           const content = CellContent({ day });
+          const dayName = DAY_NAMES[day.getDay()];
+          const dayUnavail = (emp.unavailable_hours || []).filter((b) => b.day === dayName);
+          const hasUnavail = dayUnavail.length > 0;
+          const isAllDayUnavail = dayUnavail.some((b) => (b.start_time || "") <= "00:00" && (b.end_time || "") >= "23:59");
+          const unavailTitle = !hasUnavail ? "" : isAllDayUnavail
+            ? `${emp.name} is unavailable all day`
+            : `${emp.name} unavailable ${dayUnavail.map((b) => `${fmtTime(b.start_time)}-${fmtTime(b.end_time)}`).join(", ")}`;
           return (
             <div
               key={day.toISOString()}
               className={"flex-1 border-r border-gray-50 last:border-r-0 px-1 py-1 flex flex-col gap-0.5 max-h-[120px] overflow-hidden relative group " +
                 (!isReorderMode ? "cursor-pointer " : "") +
                 (isToday(day) ? "bg-orange-50/20" : "")}
+              style={hasUnavail ? { backgroundImage: UNAVAIL_HATCH } : undefined}
               onClick={() => !isReorderMode && content.allItems.length === 0 && onAddShift(day, emp)}
             >
+              {hasUnavail && (
+                <div className="absolute top-0.5 right-0.5 z-10" title={unavailTitle}>
+                  <Ban className={"w-3 h-3 " + (isAllDayUnavail ? "text-gray-500/80" : "text-gray-400/70")} />
+                </div>
+              )}
               {content.visibleItems.map((item) => 
                 item.type || item.reason !== undefined ? (
                   <TimeOffPill key={item.id} timeOff={item} onClick={onEditTimeOff} />

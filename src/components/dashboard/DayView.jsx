@@ -91,6 +91,7 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
   const leftPct = (startMinsRel / totalMinutes) * 100;
   const widthPct = (durMins / totalMinutes) * 100;
   const color = shift.color || "#FF8C00";
+  const isTentative = !!shift.tentative;
   const minsPerPx = totalMinutes / timelineWidth;
 
   useEffect(() => { setLiveStart(null); setLiveEnd(null); }, [shift.start_time, shift.end_time]);
@@ -164,7 +165,8 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
       style={{
         left: `${leftPct}%`,
         width: `${widthPct}%`,
-        backgroundColor: color,
+        backgroundColor: isTentative ? "#fff" : color,
+        border: isTentative ? `2px solid ${color}` : undefined,
         cursor: barCursor,
         zIndex: liveStart !== null ? 10 : 1,
         opacity: liveStart !== null ? 0.9 : 1,
@@ -200,11 +202,11 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
         borderLeft: hoveredEdge === "left" ? "3px solid rgba(255,255,255,0.8)" : "none",
       }} />
       <div className="absolute inset-0 flex items-center justify-between px-2.5 overflow-hidden pointer-events-none">
-        <span className="text-white text-xs font-semibold truncate">
+        <span className={(isTentative ? "text-gray-900" : "text-white") + " text-xs font-semibold truncate"}>
           {fmtTimeFull(displayStartTime)} to {fmtTimeFull(displayEndTime)}
           <span className="opacity-75 font-normal ml-1.5">{emp.title}</span>
         </span>
-        <span className="text-white text-xs font-bold opacity-90 ml-2 shrink-0">
+        <span className={(isTentative ? "text-gray-500" : "text-white opacity-90") + " text-xs font-bold ml-2 shrink-0"}>
           {(durMins / 60) % 1 === 0 ? `${durMins / 60}h` : `${(durMins / 60).toFixed(1)}h`}
         </span>
       </div>
@@ -326,6 +328,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
 
   const totalShiftCount = dayShifts.length;
   const totalHours = dayShifts.reduce((sum, s) => {
+    if (s.tentative) return sum; // backup shifts do not count toward hours
     const start = timeToMinutes(s.start_time);
     let end = timeToMinutes(s.end_time);
     if (end <= start) end += 24 * 60;
@@ -737,6 +740,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                     {employees.map((emp, idx) => {
                       const empShifts = dayShifts.filter((s) => s.employee_id === emp.id);
                       const empHours = empShifts.reduce((sum, s) => {
+                        if (s.tentative) return sum; // backup shifts do not count toward hours
                         const start = timeToMinutes(s.start_time);
                         let end = timeToMinutes(s.end_time);
                         if (end <= start) end += 24 * 60;
@@ -766,7 +770,11 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                               <div className="flex-1 flex items-center px-3">
                                 <div className="flex gap-1 flex-wrap">
                                   {empShifts.map((s) => (
-                                    <span key={s.id} className="text-xs px-2 py-1 rounded-md text-white font-semibold" style={{ backgroundColor: s.color || "#FF8C00" }}>
+                                    <span
+                                      key={s.id}
+                                      className={"text-xs px-2 py-1 rounded-md font-semibold " + (s.tentative ? "text-gray-900" : "text-white")}
+                                      style={s.tentative ? { backgroundColor: "#fff", border: `2px solid ${s.color || "#FF8C00"}` } : { backgroundColor: s.color || "#FF8C00" }}
+                                    >
                                       {fmtTimeFull(s.start_time)}-{fmtTimeFull(s.end_time)}
                                     </span>
                                   ))}
@@ -789,6 +797,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
             employees.map((emp) => {
               const empShifts = dayShifts.filter((s) => s.employee_id === emp.id);
               const empHours = empShifts.reduce((sum, s) => {
+                if (s.tentative) return sum; // backup shifts do not count toward hours
                 const start = timeToMinutes(s.start_time);
                 let end = timeToMinutes(s.end_time);
                 if (end <= start) end += 24 * 60;

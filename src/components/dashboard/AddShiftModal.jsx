@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, isSameWeek } from "date-fns";
 import { Trash2, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
@@ -44,6 +44,7 @@ function getWeeklyHours(employeeId, shifts, weekDate) {
   return shifts
     .filter((s) => {
       if (s.employee_id !== employeeId) return false;
+      if (s.tentative) return false; // tentative/backup shifts do not count toward hours
       const sd = new Date(s.date + "T00:00:00");
       return isSameWeek(sd, weekDate, { weekStartsOn: 1 });
     })
@@ -209,6 +210,8 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
   const [employeeId, setEmployeeId] = useState("");
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
+  const [tentative, setTentative] = useState(false); // backup/tentative shift - not counted in hours
+  const [pendingPast, setPendingPast] = useState(null); // null | "save" | "delete" - past-date confirm
 
   // Compute smart default times based on store open hours (or a given start time)
   function getDefaultTimes(dateObj, overrideStart = null) {
@@ -243,6 +246,8 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
   }
 
   useEffect(() => {
+    setPendingPast(null);
+    setTentative(editShift ? !!editShift.tentative : false);
     if (editShift) {
       setEmployeeId(editShift.employee_id);
       setStartTime(editShift.start_time);
@@ -262,9 +267,14 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
   const shiftsForCalc = isEditing ? (shifts || []).filter((s) => s.id !== editShift.id) : (shifts || []);
   const existingHours = selectedEmp ? getWeeklyHours(selectedEmp.id, shiftsForCalc, weekDate) : 0;
   const thisShiftHours = timeToHours(startTime, endTime);
-  const projectedHours = existingHours + thisShiftHours;
+  const projectedHours = existingHours + (tentative ? 0 : thisShiftHours);
 
   const displayDate = editShift ? new Date(editShift.date + "T00:00:00") : date;
+
+  // Past-date guard: warn before changing anything dated before today (local).
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const targetDateStr = editShift ? editShift.date : (date ? format(date, "yyyy-MM-dd") : null);
+  const isPastDate = targetDateStr ? targetDateStr < todayStr : false;
 
   const shiftDate = displayDate;
   const storeHours = getStoreHours(storeSettings, shiftDate);
@@ -358,6 +368,7 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
       start_time: startTime,
       end_time: endTime,
       color: emp.color || "#FF8C00",
+      tentative,
     }, editShift ? editShift.id : null);
     onClose();
   };
@@ -441,6 +452,14 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
             </div>
           </div>
 
+          <div className="flex items-start gap-2.5 rounded-lg border border-gray-200 px-3 py-2.5">
+            <Checkbox id="tentative-shift" checked={tentative} onCheckedChange={(v) => setTentative(!!v)} className="mt-0.5" />
+            <label htmlFor="tentative-shift" className="cursor-pointer select-none">
+              <span className="text-sm font-medium text-gray-700">Tentative / backup shift</span>
+              <span className="block text-xs text-gray-400">Shown as an outline and not counted toward weekly hours</span>
+            </label>
+          </div>
+
           {unavailableWarning && (
             <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-700">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
@@ -463,29 +482,53 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
           )}
         </div>
 
-        <DialogFooter className="flex items-center justify-between sm:justify-between gap-2">
-          {isEditing ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { onDelete(editShift.id); onClose(); }}
-              className="text-red-500 hover:text-red-600 hover:bg-red-50"
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              Delete
-            </Button>
-          ) : <div />}
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button
-              onClick={handleSave}
-              disabled={!employeeId || !!closedWarning || !!shiftConflictWarning}
-              className="bg-orange-500 hover:bg-orange-600"
-            >
-              {isEditing ? "Save Changes" : "Add Shift"}
-            </Button>
+        {pendingPast ? (
+          <div className="pt-2">
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-800 mb-3">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+              <span>
+                You are {pendingPast === "delete" ? "deleting" : "changing"} a shift on a <strong>past date</strong>
+                {displayDate ? ` (${format(displayDate, "EEE, MMM d")})` : ""}. Are you sure?
+              </span>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setPendingPast(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  if (pendingPast === "delete") { onDelete(editShift.id); onClose(); }
+                  else { handleSave(); }
+                }}
+                className={pendingPast === "delete" ? "bg-red-500 hover:bg-red-600" : "bg-orange-500 hover:bg-orange-600"}
+              >
+                Yes, {pendingPast === "delete" ? "delete" : "save"}
+              </Button>
+            </div>
           </div>
-        </DialogFooter>
+        ) : (
+          <DialogFooter className="flex items-center justify-between sm:justify-between gap-2">
+            {isEditing ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { if (isPastDate) { setPendingPast("delete"); } else { onDelete(editShift.id); onClose(); } }}
+                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete
+              </Button>
+            ) : <div />}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button
+                onClick={() => { if (isPastDate) { setPendingPast("save"); } else { handleSave(); } }}
+                disabled={!employeeId || !!closedWarning || !!shiftConflictWarning}
+                className="bg-orange-500 hover:bg-orange-600"
+              >
+                {isEditing ? "Save Changes" : "Add Shift"}
+              </Button>
+            </div>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

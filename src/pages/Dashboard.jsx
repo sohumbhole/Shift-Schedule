@@ -269,6 +269,7 @@ export default function Dashboard() {
           start_time: s.start_time,
           end_time: s.end_time,
           color: s.color,
+          tentative: s.tentative,
         },
         forward: { id: s.id },
       });
@@ -418,8 +419,8 @@ export default function Dashboard() {
     });
 
     // Capture payloads before deleting
-    const savedShifts = weekShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
-      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedShifts = weekShifts.map(({ employee_id, employee_name, date, start_time, end_time, color, tentative }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color, tentative }));
     const savedTimeOffs = weekTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) =>
       ({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date: date || start_date }));
 
@@ -448,8 +449,8 @@ export default function Dashboard() {
     const dayShifts = shifts.filter((s) => s.date === dayStr);
     const dayTimeOffs = timeOffs.filter((t) => (t.date || t.start_date) === dayStr && t.type === "regular_off");
 
-    const savedShifts = dayShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
-      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedShifts = dayShifts.map(({ employee_id, employee_name, date, start_time, end_time, color, tentative }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color, tentative }));
     const savedTimeOffs = dayTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) =>
       ({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date: date || start_date }));
 
@@ -484,8 +485,8 @@ export default function Dashboard() {
     });
 
     // Capture current week before deleting (for undo)
-    const savedCurrShifts = currShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
-      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedCurrShifts = currShifts.map(({ employee_id, employee_name, date, start_time, end_time, color, tentative }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color, tentative }));
     const savedCurrTimeOffs = currTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) =>
       ({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date: date || start_date }));
 
@@ -493,9 +494,9 @@ export default function Dashboard() {
     for (const t of currTimeOffs) await api.entities.TimeOff.delete(t.id);
 
     const prevShifts = shifts.filter((s) => { const d = new Date(s.date + "T00:00:00"); return d >= prevWeekStart && d < prevWeekEnd; });
-    const newShifts = prevShifts.map(({ employee_id, employee_name, start_time, end_time, color, date }) => {
+    const newShifts = prevShifts.map(({ employee_id, employee_name, start_time, end_time, color, date, tentative }) => {
       const nd = new Date(date + "T00:00:00"); nd.setDate(nd.getDate() + 7);
-      return { employee_id, employee_name, start_time, end_time, color, date: format(nd, "yyyy-MM-dd") };
+      return { employee_id, employee_name, start_time, end_time, color, tentative, date: format(nd, "yyyy-MM-dd") };
     });
     if (newShifts.length > 0) await api.entities.Shift.bulkCreate(newShifts);
 
@@ -532,14 +533,14 @@ export default function Dashboard() {
     const todayDateStr = format(selectedDay, "yyyy-MM-dd");
 
     const todayShifts = shifts.filter((s) => s.date === todayDateStr);
-    const savedTodayShifts = todayShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
-      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedTodayShifts = todayShifts.map(({ employee_id, employee_name, date, start_time, end_time, color, tentative }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color, tentative }));
 
     for (const s of todayShifts) await api.entities.Shift.delete(s.id);
 
     const prevShifts = shifts.filter((s) => s.date === prevDateStr);
-    const newShifts = prevShifts.map(({ employee_id, employee_name, start_time, end_time, color }) =>
-      ({ employee_id, employee_name, start_time, end_time, color, date: todayDateStr }));
+    const newShifts = prevShifts.map(({ employee_id, employee_name, start_time, end_time, color, tentative }) =>
+      ({ employee_id, employee_name, start_time, end_time, color, tentative, date: todayDateStr }));
     if (newShifts.length > 0) await api.entities.Shift.bulkCreate(newShifts);
 
     queryClient.invalidateQueries({ queryKey: ["shifts"] });
@@ -594,6 +595,7 @@ export default function Dashboard() {
   // shifts.length directly would show all-time counts instead of this week only.
   const weekShifts = shifts.filter(s => weekDays.some(d => isSameDay(new Date(s.date + "T00:00:00"), d)));
   const weekTotalHours = weekShifts.reduce((sum, s) => {
+    if (s.tentative) return sum; // backup shifts do not count toward hours
     const [sh, sm] = s.start_time.split(":").map(Number);
     const [eh, em] = s.end_time.split(":").map(Number);
     const start = sh * 60 + sm;
@@ -707,6 +709,7 @@ export default function Dashboard() {
               start_time: newStart,
               end_time: newEnd,
               color: targetEmp.color,
+              tentative: !!origShift.tentative,
             });
           }}
           onPrevDay={() => setSelectedDay(new Date(selectedDay.getTime() - 86400000))}

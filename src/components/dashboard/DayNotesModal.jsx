@@ -12,6 +12,7 @@ const MAX_CHARS = 2000;
 
 export default function DayNotesModal({ open, onClose, weekStart }) {
   const [notes, setNotes] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const queryClient = useQueryClient();
 
   // yyyy-MM-dd string used as the key inside metadata.week_notes
@@ -29,6 +30,7 @@ export default function DayNotesModal({ open, onClose, weekStart }) {
     if (open && weekKey) {
       const existing = settings?.metadata?.week_notes?.[weekKey] || "";
       setNotes(existing);
+      setConfirmDelete(false);
     }
   }, [open, weekKey, settings]);
 
@@ -78,9 +80,21 @@ export default function DayNotesModal({ open, onClose, weekStart }) {
   const isDeleting = deleteMutation.isPending;
   const isBusy = isSaving || isDeleting;
   const atLimit = notes.length >= MAX_CHARS;
+  const existingNote = settings?.metadata?.week_notes?.[weekKey] || "";
+
+  // Dismissing via the X, clicking outside, or Escape should AUTO-SAVE (only if
+  // something changed). The explicit Cancel button discards instead.
+  const handleDismiss = () => {
+    if (isBusy) return;
+    if (notes !== existingNote) {
+      saveMutation.mutate(notes); // saves, then closes in onSuccess
+    } else {
+      onClose();
+    }
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleDismiss(); }}>
       <DialogContent className="sm:max-w-lg flex flex-col h-[68vh]">
         <DialogHeader className="shrink-0">
           <DialogTitle>Notes for the week</DialogTitle>
@@ -107,16 +121,34 @@ export default function DayNotesModal({ open, onClose, weekStart }) {
         </div>
 
         <DialogFooter className="shrink-0 flex justify-between sm:justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => deleteMutation.mutate()}
-            disabled={isBusy}
-            className="text-red-500 hover:text-red-600 hover:bg-red-50"
-          >
-            <Trash2 className="w-4 h-4 mr-1" />
-            {isDeleting ? "Deleting..." : "Delete"}
-          </Button>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-red-600 font-medium">Delete this note?</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => deleteMutation.mutate()}
+                disabled={isBusy}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                {isDeleting ? "Deleting..." : "Yes, delete"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)} disabled={isBusy} className="text-gray-500">
+                No
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmDelete(true)}
+              disabled={isBusy || !existingNote}
+              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              Delete
+            </Button>
+          )}
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={onClose} disabled={isBusy}>
               Cancel

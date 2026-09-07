@@ -235,3 +235,97 @@ A local archive snapshot of the full project was taken and tagged for this date/
 ## Credentials Location
 
 `~/blueberry/credentials.md` (gitignored) - has Supabase DB passwords for both projects
+
+## Session: 2026-09-07 (Windows machine sync, backups, rules)
+
+### This repo also lives on a Windows machine
+Path: `C:\Users\sohum\Documents\Atomic Wings Shift Scedule Website\Shift-Schedule-Repo`.
+Lesson learned: the local checkout can fall behind the live GitHub `main`. Always run
+`git fetch` and compare `main..origin/main` before assuming local == live. On 2026-09-07 this
+Windows checkout was found 17 commits behind; a plain `git status` showed "in sync" only because
+the cached remote ref was stale. Nearly regressed the live app (would have wiped the Notes feature)
+before this was caught.
+
+### Windows local backups (this machine)
+Supabase Free takes no automatic backups, so a Windows Task Scheduler job "Supabase Weekly Backup"
+runs a full backup of all users every Monday 1 AM to `..\Backups\backup-<timestamp>\` (one folder
+per user, plus a manifest). It runs on battery, wakes from sleep, and catches up on next wake if
+missed. Helper scripts in the repo root (they read secrets from `.env.local`, never print them):
+- `_backup_user.mjs` - backs up one user (by email or UUID) or `--all`. Reads the LIVE schema each
+  run via the PostgREST OpenAPI spec, so column drift is captured; uses `SELECT *`.
+- `_discover_schema.mjs` - prints the live public tables and columns.
+- `_run_weekly_backup.cmd` - wrapper the scheduled task runs.
+No Supabase Storage buckets exist, so there are no files to download beyond DB rows (re-check
+each run).
+
+### Rules reinforced
+- **No em dashes or en dashes anywhere, ever** (code, comments, UI, docs). Plain hyphen only.
+- **Do not change the DB schema or delete real rows just to test.** Deliberate feature migrations
+  are done carefully (see the supabase skill, 3-step add-column pattern). To test against the live
+  DB, use a far-future empty week, write test rows there, then delete only those rows. Prefer mock
+  mode (unset `VITE_SUPABASE_*`) for pure UI work.
+- **Never push until Sohum says so;** test locally first.
+
+### Requests from mom (2026-08-30) - status as of 2026-09-07 (built locally, not pushed)
+1. DONE - Removed "Load Test Data" and "Reset All" from Settings; deleted `DataControls.jsx` and
+   `testData.js`.
+2. DONE - Employee unavailability now shows on the WEEK view (subtle hatch on the cell plus a small
+   ban icon with a tooltip; the icon is darker for all-day unavailability). `CalendarGrid.jsx`.
+3. DONE (shift modal) - Add/edit/delete of a shift on a PAST date now asks for confirmation before
+   saving (`AddShiftModal.jsx`). NOT yet covered: time-off edits and drag/resize/move in DayView,
+   and the copy/clear-week/day bulk actions - follow-up if mom wants full coverage.
+4. DONE - Tentative / backup shifts, via a real `tentative boolean NOT NULL DEFAULT false`
+   column on `shifts` (Sohum approved the migration). The migration has been APPLIED to the live
+   DB and verified on 2026-09-07 with `node _discover_schema.mjs` (shifts now reports
+   `..., color, created_at, tentative`). The statement that was run, for the record:
+     ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS tentative boolean NOT NULL DEFAULT false;
+   Checkbox in the Add/Edit Shift modal; rendered as an outline (colored border, white fill, dark
+   text, no extra label) in week and day views; excluded from ALL hours math (modal, week grid,
+   day view, dashboard subtitle); shown in exports (outlined box in the image tables, " (backup)"
+   text tag in the condensed Employee Summary). Preserved through copy week/day, alt-drag copy, and
+   undo/redo. Flows through the data layer and backups automatically (SELECT *). Migration file
+   `001_initial_schema.sql` updated to document the column.
+5. DONE - "Employee Summary" export can now target a single employee (new "Employee Summary: one
+   person" picker in the export menu). `ExportSchedule.jsx`.
+6. DONE - Week notes modal now auto-saves when you click the X, click outside, or press Escape
+   (Cancel still discards), and Delete now asks for confirmation. `DayNotesModal.jsx`.
+7. DONE - `reset-password.js` now sends from `sohumbhole@gmail.com` (the same verified sender
+   signup uses) instead of the likely-unverified `noreply@shift-schedule.app`.
+
+8. DONE - Fixed the tentative outline being drawn wrong in "Export as Image" (mom reported the
+   outline was off-center and cut through the time text). See the section below for the cause.
+
+### html2canvas + Tailwind: the export text baseline bug (2026-09-07)
+
+Root cause, worth remembering because it is invisible until something has a border:
+
+html2canvas 1.4.1 works out where a font's baseline sits by inserting a hidden 1x1 `<img>` next to
+a sample `<span>` and reading `img.offsetTop` (see `FontMetrics.parseMetrics` in
+`node_modules/html2canvas/dist/html2canvas.js`). That measurement only works while the img is
+**inline**. Tailwind's preflight ships
+`img,svg,video,canvas,audio,iframe,embed,object{display:block;vertical-align:middle}`, which knocks
+the probe onto its own line and inflates the measured baseline by roughly a line height. Every
+glyph in every exported image was therefore painted about 6px lower than the browser puts it.
+
+Plain text hid it. The tentative outline did not: measured in the repro, the box was drawn
+correctly at y 22.0-43.0 but the text ink landed at 34.5-45.0, i.e. hanging 2px BELOW its own
+bottom border. Adding padding does not help, because the box was never the thing in the wrong
+place.
+
+Fix: `src/lib/exportImage.js` exports `renderNodeToCanvas(node, options)`, which injects
+`img[width="1"][height="1"]{display:inline !important;vertical-align:baseline !important}` for the
+duration of the render and removes it in a `finally`. The selector matches only html2canvas's own
+measuring probe, so nothing on the visible page is affected. Both html2canvas call sites now go
+through it (`ExportSchedule.jsx` and `ExportScreenshot.jsx`).
+
+Side effect worth knowing: ALL text in exported images moved up about 5px into its correct
+position, so exports are slightly better aligned overall, not just the tentative boxes.
+
+The tentative box padding is `3px 8px 6px` (heavier at the bottom on purpose). Even with the
+baseline fixed, html2canvas still paints roughly 2px low because it uses `textBaseline = 'bottom'`
+plus a `+ 2` fudge in the metric. Measured after the fix: 8.5px above the text, 7.0px below.
+That element is only ever rasterized (it is mounted at `position: fixed; top/left: -9999px` and
+never shown on screen), so tuning its padding for the raster rather than for the DOM is correct.
+
+If a future export ever looks vertically off again, reach for
+`node_modules/html2canvas/dist/html2canvas.js` `FontMetrics.parseMetrics` first, not padding.

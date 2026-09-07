@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { format, addDays } from "date-fns";
 import { ChevronDown } from "lucide-react";
-import html2canvas from "html2canvas";
+import { renderNodeToCanvas } from "@/lib/exportImage";
 
 function fmtTime(t) {
   if (!t) return "";
@@ -12,7 +12,7 @@ function fmtTime(t) {
 }
 
 async function exportToImage(node, filename) {
-  const canvas = await html2canvas(node, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+  const canvas = await renderNodeToCanvas(node, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
   const url = canvas.toDataURL("image/png");
   const a = document.createElement("a");
   a.href = url;
@@ -20,6 +20,11 @@ async function exportToImage(node, filename) {
   a.click();
 }
 
+// The tentative outline is only ever rasterized by html2canvas, never shown on
+// screen, so its padding is tuned for that raster: even with the baseline fix in
+// lib/exportImage.js, html2canvas paints text ~2px lower than the browser does,
+// so the box carries a little more padding at the bottom to keep the time
+// centered inside the outline.
 // Week view table: employees × 7 days
 function WeekTable({ weekStart, shifts, employees, filterEmployee }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -60,7 +65,11 @@ function WeekTable({ weekStart, shifts, employees, filterEmployee }) {
                     <span style={{ color: "#aaa", fontSize: 11 }}>OFF</span>
                   ) : (
                     dayShifts.map((s, i) => (
-                      <div key={i} style={{ fontWeight: 600, marginBottom: 2 }}>{fmtTime(s.start_time)} - {fmtTime(s.end_time)}</div>
+                      <div key={i} style={s.tentative
+                        ? { fontWeight: 600, marginBottom: 3, border: `1.5px solid ${emp.color || "#888"}`, background: "#fff", color: "#111", borderRadius: 4, padding: "3px 8px 6px", display: "inline-block", lineHeight: 1.3, whiteSpace: "nowrap" }
+                        : { fontWeight: 600, marginBottom: 2 }}>
+                        {fmtTime(s.start_time)} - {fmtTime(s.end_time)}
+                      </div>
                     ))
                   )}
                 </td>
@@ -104,7 +113,11 @@ function DayTable({ day, shifts, employees, filterEmployee }) {
                     <span style={{ color: "#aaa", fontSize: 11 }}>OFF</span>
                   ) : (
                     dayShifts.map((s, i) => (
-                      <span key={i} style={{ fontWeight: 600, marginRight: 12 }}>{fmtTime(s.start_time)} - {fmtTime(s.end_time)}</span>
+                      <span key={i} style={s.tentative
+                        ? { fontWeight: 600, marginRight: 12, border: `1.5px solid ${emp.color || "#888"}`, background: "#fff", color: "#111", borderRadius: 4, padding: "3px 8px 6px", display: "inline-block", lineHeight: 1.3, whiteSpace: "nowrap" }
+                        : { fontWeight: 600, marginRight: 12 }}>
+                        {fmtTime(s.start_time)} - {fmtTime(s.end_time)}
+                      </span>
                     ))
                   )}
                 </td>
@@ -117,8 +130,8 @@ function DayTable({ day, shifts, employees, filterEmployee }) {
   );
 }
 
-// Condensed "send to employee" view
-function CondensedView({ weekStart, selectedDay, shifts, employees, isDayView }) {
+// Condensed "send to employee" view. Pass filterEmployee to render just one person.
+function CondensedView({ weekStart, selectedDay, shifts, employees, isDayView, filterEmployee }) {
   const days = isDayView
     ? [selectedDay || weekStart]
     : Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -127,22 +140,24 @@ function CondensedView({ weekStart, selectedDay, shifts, employees, isDayView })
     ? format(days[0], "MMMM d")
     : `${format(days[0], "MMMM d")} - ${format(days[days.length - 1], "do")}`;
 
+  const displayEmployees = filterEmployee ? employees.filter((e) => e.id === filterEmployee.id) : employees;
+
   return (
     <div style={{ fontFamily: "Arial, sans-serif", backgroundColor: "#fff", padding: "24px 28px", minWidth: 320 }}>
-      {employees.map((emp, idx) => {
+      {displayEmployees.map((emp, idx) => {
         const empShifts = days.flatMap((day) => {
           const dayStr = format(day, "yyyy-MM-dd");
           return shifts.filter((s) => s.employee_id === emp.id && s.date === dayStr).map((s) => ({ day, s }));
         });
         const hasShifts = empShifts.length > 0;
         return (
-          <div key={emp.id} style={{ marginBottom: idx < employees.length - 1 ? 24 : 0 }}>
+          <div key={emp.id} style={{ marginBottom: idx < displayEmployees.length - 1 ? 24 : 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 6 }}>
               {dateLabel} - {emp.name}
             </div>
             {hasShifts ? empShifts.map(({ day, s }, si) => (
               <div key={si} style={{ fontSize: 14, color: "#333", paddingLeft: 4, marginBottom: 2 }}>
-                {format(day, "EEE")} {fmtTime(s.start_time)} - {fmtTime(s.end_time)}
+                {format(day, "EEE")} {fmtTime(s.start_time)} - {fmtTime(s.end_time)}{s.tentative ? " (backup)" : ""}
               </div>
             )) : (
               <div style={{ fontSize: 14, color: "#999", paddingLeft: 4, fontStyle: "italic" }}>No shifts</div>
@@ -150,7 +165,7 @@ function CondensedView({ weekStart, selectedDay, shifts, employees, isDayView })
           </div>
         );
       })}
-      {employees.length === 0 && (
+      {displayEmployees.length === 0 && (
         <div style={{ fontSize: 13, color: "#aaa" }}>No employees found</div>
       )}
     </div>
@@ -160,15 +175,17 @@ function CondensedView({ weekStart, selectedDay, shifts, employees, isDayView })
 export default function ExportSchedule({ weekStart, selectedDay, shifts, employees, isDayView }) {
   const [open, setOpen] = useState(false);
   const [showEmpPicker, setShowEmpPicker] = useState(false);
+  const [showSummaryPicker, setShowSummaryPicker] = useState(false);
   const [exportTarget, setExportTarget] = useState(undefined);
-  const [condensedPending, setCondensedPending] = useState(false);
+  // undefined = not rendering; null = all employees; emp object = one employee
+  const [condensedTarget, setCondensedTarget] = useState(undefined);
   const ref = useRef(null);
   const tableRef = useRef(null);
   const condensedRef = useRef(null);
 
   useEffect(() => {
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setShowEmpPicker(false); }
+      if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setShowEmpPicker(false); setShowSummaryPicker(false); }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -185,12 +202,14 @@ export default function ExportSchedule({ weekStart, selectedDay, shifts, employe
     setExportTarget(undefined);
   };
 
-  const doCondensedExport = async () => {
+  const doCondensedExport = async (filterEmployee) => {
     if (!condensedRef.current) return;
     const label = isDayView ? format(selectedDay || weekStart, "MMM-d-yyyy") : `${format(weekStart, "MMM-d")}_${format(addDays(weekStart, 6), "MMM-d-yyyy")}`;
-    await exportToImage(condensedRef.current, `schedule_condensed_${label}.png`);
+    const empLabel = filterEmployee ? `_${filterEmployee.name.replace(/\s+/g, "_")}` : "";
+    await exportToImage(condensedRef.current, `schedule_summary${empLabel}_${label}.png`);
     setOpen(false);
-    setCondensedPending(false);
+    setShowSummaryPicker(false);
+    setCondensedTarget(undefined);
   };
 
   const renderHiddenTable = (filterEmployee) => {
@@ -214,9 +233,9 @@ export default function ExportSchedule({ weekStart, selectedDay, shifts, employe
   return (
     <div className="relative" ref={ref}>
       {exportTarget !== undefined && renderHiddenTable(exportTarget)}
-      {condensedPending && (
+      {condensedTarget !== undefined && (
         <div ref={condensedRef} style={{ position: "fixed", top: -9999, left: -9999 }}>
-          <CondensedView weekStart={weekStart} selectedDay={selectedDay} shifts={shifts} employees={employees} isDayView={isDayView} />
+          <CondensedView weekStart={weekStart} selectedDay={selectedDay} shifts={shifts} employees={employees} isDayView={isDayView} filterEmployee={condensedTarget || null} />
         </div>
       )}
 
@@ -239,11 +258,34 @@ export default function ExportSchedule({ weekStart, selectedDay, shifts, employe
           </button>
 
           <button
-            onClick={() => { setCondensedPending(true); setTimeout(doCondensedExport, 80); }}
+            onClick={() => { setCondensedTarget(null); setTimeout(() => doCondensedExport(null), 80); }}
             className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors text-left"
           >
-            Export Employee Summary
+            Export Employee Summary (all)
           </button>
+
+          <button
+            onClick={() => setShowSummaryPicker((v) => !v)}
+            className="w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors text-left"
+          >
+            <span>Employee Summary: one person</span>
+            <ChevronDown className="w-3 h-3" />
+          </button>
+
+          {showSummaryPicker && (
+            <div className="border-t border-gray-100 max-h-48 overflow-y-auto">
+              {employees.map((emp) => (
+                <button
+                  key={emp.id}
+                  onClick={() => { setCondensedTarget(emp); setTimeout(() => doCondensedExport(emp), 80); }}
+                  className="w-full flex items-center gap-2.5 px-5 py-2 text-sm text-gray-600 hover:bg-orange-50 hover:text-orange-700 transition-colors text-left"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: emp.color || "#ccc" }} />
+                  {emp.name}
+                </button>
+              ))}
+            </div>
+          )}
 
           <button
             onClick={() => setShowEmpPicker((v) => !v)}

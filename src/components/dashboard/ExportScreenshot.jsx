@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { Camera } from "lucide-react";
-import html2canvas from "html2canvas";
+import { renderNodeToCanvas } from "@/lib/exportImage";
 import { format } from "date-fns";
 
 export default function ExportScreenshot({ day, containerRef, onExport }) {
@@ -61,7 +61,7 @@ export default function ExportScreenshot({ day, containerRef, onExport }) {
       
       document.body.appendChild(clone);
 
-      const canvas = await html2canvas(clone, {
+      const canvas = await renderNodeToCanvas(clone, {
         backgroundColor: "#ffffff",
         scale: 4,
         logging: false,
