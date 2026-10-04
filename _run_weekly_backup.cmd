@@ -1,10 +1,8 @@
 @echo off
-REM Weekly full Supabase backup of ALL users -> local "Backups" folder.
-REM Called by Windows Task Scheduler ("Supabase Weekly Backup"). Runs locally.
+REM Manual entry point for the Supabase backup of ALL users into the local "Backups" folder.
+REM All the logic lives in _run_weekly_backup.ps1 (keep awake, wait for network, retry, skip when
+REM a backup from the last 6 days exists). Pass -Force to back up regardless.
+REM The scheduled task "Supabase Weekly Backup" calls the .ps1 directly, hidden.
 
-cd /d "C:\Users\sohum\Documents\Atomic Wings Shift Scedule Website\Shift-Schedule-Repo"
-set "BACKUP_OUT_DIR=C:\Users\sohum\Documents\Atomic Wings Shift Scedule Website\Backups"
-
-echo ==== %DATE% %TIME% : starting full backup ==== >> "%BACKUP_OUT_DIR%\backup-log.txt"
-"C:\Program Files\nodejs\node.exe" _backup_user.mjs >> "%BACKUP_OUT_DIR%\backup-log.txt" 2>&1
-echo ==== %DATE% %TIME% : exit code %ERRORLEVEL% ==== >> "%BACKUP_OUT_DIR%\backup-log.txt"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0_run_weekly_backup.ps1" %*
+exit /b %ERRORLEVEL%

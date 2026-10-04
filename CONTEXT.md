@@ -5,7 +5,7 @@
 A restaurant employee scheduling web app built for Sohum's mom's restaurant. Family use only - no employee logins, just one manager (mom) using it to schedule staff. Lives at https://shift-schedule-website.vercel.app
 
 Business context, how mom uses the app, and the current open action items live in Sohum's brain:
-`~/brain/wiki/projects/shift-scheduler.md` (github.com/sohumbhole/brain). Read that first.
+`~/brain/wiki/atomic-wings/shift-scheduler.md` (github.com/sohumbhole/brain). Read that first.
 
 ## The Situation
 
@@ -251,16 +251,31 @@ before this was caught.
 
 ### Windows local backups (this machine)
 Supabase Free takes no automatic backups, so a Windows Task Scheduler job "Supabase Weekly Backup"
-runs a full backup of all users every Monday 1 AM to `..\Backups\backup-<timestamp>\` (one folder
-per user, plus a manifest). It runs on battery, wakes from sleep, and catches up on next wake if
-missed. Helper scripts in the repo root (they read secrets from `.env.local`, never print them):
+backs up all users to `..\Backups\backup-<timestamp>\` (one folder per user, plus `_manifest.json`,
+written last, so a folder without it is a failed attempt). Log: `..\Backups\backup-log.txt`.
+
+Triggers (changed 2026-10-04): Monday and Thursday at 1 AM (both wake the PC) plus at logon. Every
+run skips silently if a successful backup from the last 6 days exists, so Thursday and logon only do
+work when Monday failed. Runs on battery, catches up when available, 1 hour limit, hidden window.
+
+Why: on 2026-09-21 and 2026-09-28 the Monday run started after waking the PC and was killed before
+finishing (result 0xC000013A), because a PC woken by a timer sleeps again after about 2 minutes
+without input and the network is slow right after waking. `_run_weekly_backup.ps1` now keeps the PC
+awake for the run, waits up to 3 minutes for the network, limits each attempt to 10 minutes, and
+retries 3 times. Running the task as S4U (fully in the background, which would also allow an unlock
+trigger without a window flash) needs admin rights; not done.
+
+Helper scripts in the repo root (they read secrets from `.env.local`, never print them):
 - `_backup_user.mjs` - backs up EVERY user. It takes no arguments and has no way to target a
   single person (simplified 2026-09-07; it previously accepted an email or UUID). Reads the LIVE
   schema each run via the PostgREST OpenAPI spec, so column drift is captured; uses `SELECT *`.
   Backup folders are still named by the account email, which is read from the DB at run time, so
   a restore can tell whose data is whose.
 - `_discover_schema.mjs` - prints the live public tables and columns.
-- `_run_weekly_backup.cmd` - wrapper the scheduled task runs.
+- `_run_weekly_backup.ps1` - the runner the scheduled task calls (keep awake, network wait, time
+  limit, retries, skip when fresh). Test parameters: `-Force`, `-MaxAttempts`,
+  `-AttemptTimeoutSeconds`, `-RetryDelaySeconds`, `-NodeScript`.
+- `_run_weekly_backup.cmd` - manual entry point; `_run_weekly_backup.cmd -Force` always backs up.
 No Supabase Storage buckets exist, so there are no files to download beyond DB rows (re-check
 each run).
 
@@ -336,3 +351,11 @@ never shown on screen), so tuning its padding for the raster rather than for the
 
 If a future export ever looks vertically off again, reach for
 `node_modules/html2canvas/dist/html2canvas.js` `FontMetrics.parseMetrics` first, not padding.
+
+## Session: 2026-10-04 (security fix, backup fix)
+- Deleted `api/auth/debug.js`. It was publicly reachable at `/api/auth/debug` with no login, returned
+  the first characters of the service role and SendGrid keys plus the Supabase URL, and ran admin
+  queries on every request. Nothing referenced it.
+- Backup runner rewritten and the scheduled task changed (see "Windows local backups" above).
+- `time_off` column note corrected to `start_date`; test rows must go in 2030 or later, never the
+  week of 2026-12-28 (mom's notepad).
