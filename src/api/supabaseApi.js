@@ -17,6 +17,15 @@ async function getUserId() {
   return user.id;
 }
 
+// The live time_off table names its date column start_date. Some callers (copy previous week, the
+// undo snapshots for clear day/week and delete employee) still build payloads with `date`, which
+// PostgREST rejects (PGRST204), so copy week failed on regular days off. Map it here once.
+function toTimeOffRow(payload) {
+  if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'date')) return payload;
+  const { date, ...rest } = payload;
+  return rest.start_date ? rest : { ...rest, start_date: date };
+}
+
 function handleResponse({ data, error }) {
   if (error) throw error;
   return data;
@@ -120,7 +129,7 @@ export const supabaseApi = {
         const user_id = await getUserId();
         const { data, error } = await supabase
           .from('time_off')
-          .insert({ ...payload, user_id })
+          .insert({ ...toTimeOffRow(payload), user_id })
           .select()
           .single();
         if (error) throw error;
@@ -129,7 +138,7 @@ export const supabaseApi = {
       update: async (id, payload) => {
         const { data, error } = await supabase
           .from('time_off')
-          .update(payload)
+          .update(toTimeOffRow(payload))
           .eq('id', id)
           .select()
           .single();
@@ -142,7 +151,7 @@ export const supabaseApi = {
       },
       bulkCreate: async (items) => {
         const user_id = await getUserId();
-        const rows = items.map((item) => ({ ...item, user_id }));
+        const rows = items.map((item) => ({ ...toTimeOffRow(item), user_id }));
         const { data, error } = await supabase.from('time_off').insert(rows).select();
         if (error) throw error;
         return toAppRows(data);

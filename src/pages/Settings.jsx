@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Loader2, Clock, Store, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import ApiAccessCard from "@/components/settings/ApiAccessCard";
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -180,6 +181,10 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div id="api-access" className="mt-6">
+        <ApiAccessCard />
       </div>
     </div>
   );

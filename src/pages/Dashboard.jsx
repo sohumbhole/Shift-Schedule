@@ -802,6 +802,7 @@ export default function Dashboard() {
         date={selectedDate}
         employees={employees}
         shifts={shifts}
+        timeOffs={timeOffs}
         storeSettings={settings}
         onSave={handleSave}
         editShift={editingShift}

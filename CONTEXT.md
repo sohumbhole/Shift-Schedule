@@ -359,3 +359,80 @@ If a future export ever looks vertically off again, reach for
 - Backup runner rewritten and the scheduled task changed (see "Windows local backups" above).
 - `time_off` column note corrected to `start_date`; test rows must go in 2030 or later, never the
   week of 2026-12-28 (mom's notepad).
+
+## Session: 2026-10-04 (Muse API, built while Sohum was away)
+
+Mom uses Meta Muse as her assistant (connected to her own brain, Toast, Sysco, calendar, email). This
+session gave Muse full access to the scheduler through a private REST API. Business context and the
+plan: `~/brain/wiki/atomic-wings/muse-integration.md`.
+
+### Where things are
+- Base URL `https://shift-schedule-website.vercel.app/api/v1`. Docs for AI: `/api/v1/docs` (raw
+  Markdown, no JavaScript needed). Docs for people: `/api-docs` (public React page, no sign in).
+  OpenAPI: `/api/v1/openapi.json`.
+- Keys: website Settings > "API access" card (create, copy once, revoke; also lists recent API
+  changes with an Undo button). Home page has a small "Connect an AI assistant" link to the docs.
+- One Vercel function: `api/v1/index.js` (router). `vercel.json` rewrites `/api/v1/:path*` to
+  `/api/v1?path=:path*` (must stay ABOVE the generic `/api/(.*)` rule). Total functions: 5 (Hobby
+  limit is 12), so add routes to the router, not new files under `api/`.
+- Code under `api/_lib/` (underscore folders are not deployed as functions): `http.js` (envelope,
+  errors, Chicago time), `parse.js` (dates, "5pm" style times, quarter hour rule, employee lookup by
+  name or id), `auth.js`, `data.js` (EVERY query pinned to `user_id`), `store.js` (Storage),
+  `format.js`, `rules.js`, `change.js` (change log and undo engine), `handlers_read.js`,
+  `handlers_shifts.js`, `handlers_other.js`, `openapi.js`. Docs Markdown: `src/lib/apiDocs.js` (one
+  source for both docs URLs).
+
+### Same rules as the website
+`src/lib/shiftRules.js` holds the shift rules and is imported by BOTH `AddShiftModal.jsx` and the API.
+Blocks: outside store hours (overnight aware), overlapping shift for the same employee that day.
+Past dates need `confirm_past` (the website asks "Are you sure?"). Warnings: marked unavailable, time
+off that day (new; the modal now shows it too), over or at max weekly hours. Times must be on :00,
+:15, :30, :45 because the website's time picker only offers those. Proof that the extraction did
+not change behavior: `node scripts/tests/rules_equivalence.mjs` runs the ORIGINAL modal logic
+(frozen copy) and the module side by side on 20,000 cases from the busiest account in the newest
+backup; result 0 mismatches.
+
+### Storage instead of new tables
+No SQL access from this PC (the DB password file in the workspace root is out of date) and Sohum
+prefers no new tables. So API keys, the change log and idempotency records live in the private
+Supabase Storage bucket `api-private` (created automatically): `tokens/<sha256>.json`,
+`users/<uid>/tokens/<id>.json`, `users/<uid>/changes/<chg_id>.json`, `users/<uid>/idem/<sha256>.json`.
+Keys are `sk_shift_` + 32 random bytes and are stored only as SHA-256 hashes.
+GOTCHA: Supabase Storage downloads are CDN cached (objects default to max-age=3600). A revoked key
+kept working until this was fixed. `store.js` now uploads with `cacheControl: '0'` and reads through
+the storage REST endpoint with a unique `nocache` query string. Keep both.
+The backup script (`_backup_user.mjs`) only copies database tables, so the change log is not in the
+Windows backups; it is not primary data.
+
+### Behavior
+- Every response: `ok, status, action, message, data, warnings, errors, meta`. Errors and warnings
+  carry `code`, `message`, `hint`, `details`. Writes return the affected day(s) and employee week(s).
+- `dry_run` on every write; `Idempotency-Key` header for safe retries (24 hours); `confirm: true` for
+  clear and employee delete (mirrors the website's confirm dialogs).
+- Every API write is logged with an "inverse" (steps to put things back). `POST /changes/{id}/undo`
+  applies it, refuses with CHANGED_SINCE if the same rows were edited again (unless `force`), and
+  logs the undo itself so it can be undone. Re-created rows get new ids.
+- Copy week inserts the new rows first, then deletes the old ones, so a failure can never leave the
+  week empty (the website's copy deletes first).
+- Website auth: the Settings card calls the API with the Supabase session token (`src/lib/apiClient.js`);
+  only a session can create or revoke keys.
+- Live refresh: `refetchOnWindowFocus` is now true, and `src/hooks/useLiveRefresh.js` polls
+  `/changes/latest` every 30 seconds while the tab is visible and refetches when something new
+  appears. Realtime would need SQL (publication changes), so it is not used.
+
+### Website fixes shipped with it
+- Copy previous week (and the undo snapshots for clear day, clear week and delete employee) sent
+  time off with `date`, which the live table rejects (PGRST204: the column is `start_date`), so copy
+  week failed on regular days off after already deleting the target week's. `supabaseApi.js` now maps
+  `date` to `start_date` for every time off write.
+- The notes window merged into a cached settings row, which could erase a note written by Muse. It
+  now re-reads the row right before saving or deleting.
+- Delete employee undo now keeps the `tentative` flag on restored shifts.
+
+### Testing
+`API_TEST_EMAIL=<test account> node scripts/tests/api_integration.mjs` runs 87 checks through the
+real handler against the live DB: only in that account, only in empty 2030 weeks (it refuses
+otherwise), and it deletes everything it created (rows, storage files, keys). Covers every endpoint,
+the rules, dry run, batch, idempotency, copy and clear with undo, undo of undo, account isolation
+(another account's key gets 404 on these rows), read only keys, revoked keys. Last run 2026-10-04:
+87 passed. Use your own account, never the restaurant's.

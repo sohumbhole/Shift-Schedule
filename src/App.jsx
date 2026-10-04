@@ -8,6 +8,8 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import { isSupabaseConfigured } from '@/lib/supabaseClient';
 import Login from './pages/Login';
+import ApiDocs from './pages/ApiDocs';
+import { useLiveRefresh } from '@/hooks/useLiveRefresh';
 import { UndoHistoryProvider } from '@/lib/undoHistory';
 import { DashboardNavProvider } from '@/lib/dashboardNav';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
@@ -45,6 +47,12 @@ function UndoRedoController() {
   ) : null;
 }
 
+// Refetches the schedule when the API (e.g. Muse) changes something while this tab is open.
+function LiveRefresh() {
+  useLiveRefresh();
+  return null;
+}
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
 
@@ -68,6 +76,7 @@ const AuthenticatedApp = () => {
   return (
     <>
       <UndoRedoController />
+      <LiveRefresh />
       <Routes>
         <Route path="/" element={
           <LayoutWrapper currentPageName={mainPageKey}>
@@ -103,6 +112,8 @@ function App() {
                 path="/login"
                 element={isSupabaseConfigured() ? <Login /> : <Navigate to="/" replace />}
               />
+              {/* Public: the API docs must be readable without signing in */}
+              <Route path="/api-docs" element={<ApiDocs />} />
               <Route
                 path="*"
                 element={

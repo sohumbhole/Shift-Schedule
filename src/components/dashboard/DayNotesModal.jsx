@@ -34,9 +34,18 @@ export default function DayNotesModal({ open, onClose, weekStart }) {
     }
   }, [open, weekKey, settings]);
 
+  // Re-read the settings row right before writing: notes for other weeks may have been added since
+  // this page loaded (for example by Muse through the API), and merging into a stale copy would
+  // erase them.
+  const loadFreshSettings = async () => {
+    const rows = await api.entities.StoreSettings.list();
+    return rows[0] || settings;
+  };
+
   const saveMutation = useMutation({
     mutationFn: async (noteText) => {
-      const currentMeta = settings?.metadata || {};
+      const fresh = await loadFreshSettings();
+      const currentMeta = fresh?.metadata || {};
       const newMeta = {
         ...currentMeta,
         week_notes: {
@@ -44,8 +53,8 @@ export default function DayNotesModal({ open, onClose, weekStart }) {
           [weekKey]: noteText,
         },
       };
-      if (settings) {
-        await api.entities.StoreSettings.update(settings.id, { metadata: newMeta });
+      if (fresh) {
+        await api.entities.StoreSettings.update(fresh.id, { metadata: newMeta });
       } else {
         await api.entities.StoreSettings.create({ metadata: newMeta });
       }
@@ -59,11 +68,12 @@ export default function DayNotesModal({ open, onClose, weekStart }) {
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!settings || !weekKey) return;
-      const currentMeta = settings.metadata || {};
+      const fresh = await loadFreshSettings();
+      const currentMeta = fresh.metadata || {};
       const weekNotes = { ...(currentMeta.week_notes || {}) };
       delete weekNotes[weekKey];
       const newMeta = { ...currentMeta, week_notes: weekNotes };
-      await api.entities.StoreSettings.update(settings.id, { metadata: newMeta });
+      await api.entities.StoreSettings.update(fresh.id, { metadata: newMeta });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["storeSettings"] });

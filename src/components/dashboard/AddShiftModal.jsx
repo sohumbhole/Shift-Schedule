@@ -4,8 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, isSameWeek } from "date-fns";
-import { Trash2, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { format } from "date-fns";
+import { Trash2, AlertTriangle, CheckCircle, XCircle, CalendarOff } from "lucide-react";
+import {
+  timeToMinutes, minutesToTime, shiftHours, weeklyHours, getStoreHoursFor, checkStoreHours,
+  findShiftConflict, findUnavailability, findTimeOffConflicts, dayNameOf,
+} from "@/lib/shiftRules";
 
 const MINUTES = ["00", "15", "30", "45"];
 
@@ -29,26 +33,6 @@ function to24h(h12, minute, ampm) {
 function fmtDisplay(value) {
   const { h12, minute, ampm } = parseTo12h(value);
   return `${h12}:${minute} ${ampm}`;
-}
-
-function timeToHours(start, end) {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  let diff = (eh * 60 + em) - (sh * 60 + sm);
-  if (diff <= 0) diff += 24 * 60; // crosses midnight
-  return diff / 60;
-}
-
-// Calculate scheduled hours for an employee this week from existing shifts
-function getWeeklyHours(employeeId, shifts, weekDate) {
-  return shifts
-    .filter((s) => {
-      if (s.employee_id !== employeeId) return false;
-      if (s.tentative) return false; // tentative/backup shifts do not count toward hours
-      const sd = new Date(s.date + "T00:00:00");
-      return isSameWeek(sd, weekDate, { weekStartsOn: 1 });
-    })
-    .reduce((sum, s) => sum + timeToHours(s.start_time, s.end_time), 0);
 }
 
 function HoursStatus({ employee, weeklyHours }) {
@@ -181,30 +165,7 @@ function TimePicker({ value, onChange }) {
   );
 }
 
-const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-
-function getStoreHours(settings, date) {
-  if (!settings || !date) return null;
-  const day = DAY_KEYS[date.getDay()];
-  const open = settings[`${day}_open`];
-  const close = settings[`${day}_close`];
-  if (!open || !close) return null;
-  return { open, close };
-}
-
-function timeToMinutes(t) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function minutesToTime(totalMins) {
-  const normalized = ((totalMins % (24 * 60)) + 24 * 60) % (24 * 60);
-  const h = Math.floor(normalized / 60);
-  const m = normalized % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-export default function AddShiftModal({ open, onClose, date, employees, shifts, storeSettings, onSave, editShift, onDelete, preselectedEmployeeId, defaultStartTime }) {
+export default function AddShiftModal({ open, onClose, date, employees, shifts, timeOffs, storeSettings, onSave, editShift, onDelete, preselectedEmployeeId, defaultStartTime }) {
   const isEditing = !!editShift;
 
   const [employeeId, setEmployeeId] = useState("");
@@ -260,13 +221,15 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
     }
   }, [editShift, open, preselectedEmployeeId, defaultStartTime]);
 
-  const weekDate = editShift ? new Date(editShift.date + "T00:00:00") : (date || new Date());
+  // The rules below come from src/lib/shiftRules.js, which the API (/api/v1) uses too, so the
+  // website and Muse always agree on what is allowed.
+  const weekDateStr = editShift ? editShift.date : format(date || new Date(), "yyyy-MM-dd");
   const selectedEmp = employees.find((e) => e.id === employeeId);
 
   // Compute weekly hours excluding current shift if editing
   const shiftsForCalc = isEditing ? (shifts || []).filter((s) => s.id !== editShift.id) : (shifts || []);
-  const existingHours = selectedEmp ? getWeeklyHours(selectedEmp.id, shiftsForCalc, weekDate) : 0;
-  const thisShiftHours = timeToHours(startTime, endTime);
+  const existingHours = selectedEmp ? weeklyHours(selectedEmp.id, shiftsForCalc, weekDateStr) : 0;
+  const thisShiftHours = shiftHours(startTime, endTime);
   const projectedHours = existingHours + (tentative ? 0 : thisShiftHours);
 
   const displayDate = editShift ? new Date(editShift.date + "T00:00:00") : date;
@@ -277,23 +240,14 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
   const isPastDate = targetDateStr ? targetDateStr < todayStr : false;
 
   const shiftDate = displayDate;
-  const storeHours = getStoreHours(storeSettings, shiftDate);
+  const shiftDateStr = shiftDate ? format(shiftDate, "yyyy-MM-dd") : null;
+  const storeHours = getStoreHoursFor(storeSettings, shiftDateStr);
 
   // Check if shift overlaps with employee's unavailable hours
   let unavailableWarning = null;
-  if (selectedEmp && selectedEmp.unavailable_hours && selectedEmp.unavailable_hours.length > 0 && shiftDate) {
-    const dayName = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][shiftDate.getDay()];
-    const shiftStartMins = timeToMinutes(startTime);
-    let shiftEndMins = timeToMinutes(endTime);
-    if (shiftEndMins <= shiftStartMins) shiftEndMins += 24 * 60;
-
-    const conflict = selectedEmp.unavailable_hours.find((block) => {
-      if (block.day !== dayName) return false;
-      const bStart = timeToMinutes(block.start_time);
-      let bEnd = timeToMinutes(block.end_time);
-      if (bEnd <= bStart) bEnd += 24 * 60;
-      return shiftStartMins < bEnd && shiftEndMins > bStart;
-    });
+  if (selectedEmp && shiftDateStr) {
+    const dayName = dayNameOf(shiftDateStr);
+    const conflict = findUnavailability(selectedEmp, shiftDateStr, startTime, endTime);
 
     if (conflict) {
       const fmt = (t) => {
@@ -307,54 +261,33 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
 
   // Check for overlapping shifts on the same day for the same employee
   let shiftConflictWarning = null;
-  if (selectedEmp && shiftDate) {
-    const dateStr = format(shiftDate, "yyyy-MM-dd");
-    const shiftStartMins = timeToMinutes(startTime);
-    let shiftEndMins = timeToMinutes(endTime);
-    if (shiftEndMins <= shiftStartMins) shiftEndMins += 24 * 60;
-
-    const conflictingShift = shiftsForCalc.find((s) => {
-      if (s.employee_id !== selectedEmp.id) return false;
-      if (s.date !== dateStr) return false;
-      const sStart = timeToMinutes(s.start_time);
-      let sEnd = timeToMinutes(s.end_time);
-      if (sEnd <= sStart) sEnd += 24 * 60;
-      return shiftStartMins < sEnd && shiftEndMins > sStart;
-    });
+  if (selectedEmp && shiftDateStr) {
+    const conflictingShift = findShiftConflict(selectedEmp.id, shiftDateStr, startTime, endTime, shiftsForCalc);
 
     if (conflictingShift) {
       shiftConflictWarning = `Conflicts with existing shift ${fmtDisplay(conflictingShift.start_time)} - ${fmtDisplay(conflictingShift.end_time)}.`;
     }
   }
 
-  // Block shifts outside store open/close hours
+  // Block shifts outside store open/close hours (overnight aware; see shiftRules.checkStoreHours)
   let closedWarning = null;
-  if (storeHours) {
+  if (checkStoreHours(storeHours, startTime, endTime)) {
     const fmt = (t) => {
       const [h, m] = t.split(":").map(Number);
       const ampm = h >= 12 ? "PM" : "AM";
       return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
     };
-    const openMins = timeToMinutes(storeHours.open);
-    let closeMins = timeToMinutes(storeHours.close);
-    const storeIsOvernight = closeMins <= openMins;
-    if (storeIsOvernight) closeMins += 24 * 60;
+    closedWarning = `Shift must be within store hours (${fmt(storeHours.open)} - ${fmt(storeHours.close)}).`;
+  }
 
-    let startMins = timeToMinutes(startTime);
-    let endMins = timeToMinutes(endTime);
-    if (endMins <= startMins) endMins += 24 * 60;
-
-    // For overnight stores, a shift starting after midnight (e.g. 00:00-03:00) has
-    // startMins = 0, which is numerically less than openMins (e.g. 1200 for 8pm) even
-    // though midnight is within store hours. Detect this and shift both endpoints by +24h
-    // so they compare correctly against the wrapped closeMins.
-    if (storeIsOvernight && startMins < openMins && startMins + 24 * 60 <= closeMins) {
-      startMins += 24 * 60;
-      endMins += 24 * 60;
-    }
-
-    if (startMins < openMins || endMins > closeMins) {
-      closedWarning = `Shift must be within store hours (${fmt(storeHours.open)} - ${fmt(storeHours.close)}).`;
+  // Warn (do not block) when the employee has time off that day
+  let timeOffWarning = null;
+  if (selectedEmp && shiftDateStr) {
+    const overlapping = findTimeOffConflicts(selectedEmp.id, shiftDateStr, startTime, endTime, timeOffs);
+    if (overlapping.length > 0) {
+      const t = overlapping[0];
+      const when = t.full_day !== false ? "all day" : `${fmtDisplay(t.start_time)} - ${fmtDisplay(t.end_time)}`;
+      timeOffWarning = `${selectedEmp.name} has time off ${when} on this day${t.reason ? ` (${t.reason})` : ""}.`;
     }
   }
 
@@ -390,7 +323,7 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
               </SelectTrigger>
               <SelectContent className="max-h-64">
                 {employees.map((emp) => {
-                  const wh = getWeeklyHours(emp.id, shiftsForCalc, weekDate);
+                  const wh = weeklyHours(emp.id, shiftsForCalc, weekDateStr);
                   const min = emp.min_hours || 0;
                   const max = emp.max_hours || null;
                   let statusEl = null;
@@ -464,6 +397,13 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
             <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-700">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
               <span><strong>Unavailability conflict:</strong> {unavailableWarning}</span>
+            </div>
+          )}
+
+          {timeOffWarning && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-700">
+              <CalendarOff className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+              <span><strong>Time off:</strong> {timeOffWarning}</span>
             </div>
           )}
 

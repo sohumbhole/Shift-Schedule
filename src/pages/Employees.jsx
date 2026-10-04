@@ -75,8 +75,8 @@ export default function Employees() {
     const empTimeOffs = allTimeOffs.filter((t) => t.employee_id === id);
 
     // Save payloads (no id/user_id/created_date) for undo recreation
-    const savedShifts = empShifts.map(({ employee_id, employee_name, date, start_time, end_time, color }) =>
-      ({ employee_id, employee_name, date, start_time, end_time, color }));
+    const savedShifts = empShifts.map(({ employee_id, employee_name, date, start_time, end_time, color, tentative }) =>
+      ({ employee_id, employee_name, date, start_time, end_time, color, tentative }));
     const savedTimeOffs = empTimeOffs.map(({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date, start_date }) =>
       ({ employee_id, employee_name, type, full_day, start_time, end_time, reason, date: date || start_date }));
     const { id: _id, user_id: _u, created_date: _c, ...empPayload } = emp || {};

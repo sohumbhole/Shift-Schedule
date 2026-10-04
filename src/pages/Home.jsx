@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Flame, ArrowRight, Calendar, Users, Clock } from "lucide-react";
+import { Flame, ArrowRight, Calendar, Users, Clock, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
@@ -51,6 +51,14 @@ export default function Home() {
               </div>
             ))}
           </div>
+
+          <Link
+            to="/api-docs"
+            className="mt-10 inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-orange-500 transition-colors"
+          >
+            <Bot className="w-4 h-4" />
+            Connect an AI assistant (API docs)
+          </Link>
         </div>
       </section>
     </div>
