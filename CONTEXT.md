@@ -4,6 +4,9 @@
 
 A restaurant employee scheduling web app built for Sohum's mom's restaurant. Family use only - no employee logins, just one manager (mom) using it to schedule staff. Lives at https://shift-schedule-website.vercel.app
 
+Business context, how mom uses the app, and the current open action items live in Sohum's brain:
+`~/brain/wiki/projects/shift-scheduler.md` (github.com/sohumbhole/brain). Read that first.
+
 ## The Situation
 
 Sohum's mom uses this to schedule restaurant employees. She accidentally made a change once and couldn't find her shifts - caused a scare. That's why we added undo/redo. She is the only user. No employees log in. The "publish" concept that competitors use doesn't apply here.
@@ -125,7 +128,7 @@ Full implementation across 4 new files + 3 modified files.
 5. **Cursor override during drag**: Use an injected `<style id="...">` tag with `* { cursor: X !important; }` - setting `document.body.style.cursor` is NOT enough because buttons/links override it.
 6. **updateShift mutation**: needs `origData` passed as third key in variables object for undo history. mutationFn only uses `id` and `data`, so `origData` is ignored by the API call but available in onSuccess.
 7. **deleteShift/deleteTimeOff/deleteEvent**: callers must pass `{ id, shift/timeOff/event: fullObject }` - the full object is needed to store in undo stack. mutationFn destructures only `{ id }`.
-8. **Supabase time_off**: DB column is `date` (confirmed from schema). Some code paths use `t.date || t.start_date` as a fallback for safety.
+8. **Supabase time_off**: the live column is `start_date`, not `date` (verified with `node _discover_schema.mjs` on 2026-10-04; the migration file is wrong). Some code paths use `t.date || t.start_date` as a fallback for safety.
 
 ## Undo/Redo Bug Fixes (2026-05-06)
 
@@ -265,7 +268,8 @@ each run).
 - **No em dashes or en dashes anywhere, ever** (code, comments, UI, docs). Plain hyphen only.
 - **Do not change the DB schema or delete real rows just to test.** Deliberate feature migrations
   are done carefully (see the supabase skill, 3-step add-column pattern). To test against the live
-  DB, use a far-future empty week, write test rows there, then delete only those rows. Prefer mock
+  DB, use an empty week in 2030 or later (NOT the week of 2026-12-28: mom uses that week's note as
+  a notepad for supply prices), write test rows there, then delete only those rows. Prefer mock
   mode (unset `VITE_SUPABASE_*`) for pure UI work.
 - **Never push until Sohum says so;** test locally first.
 
