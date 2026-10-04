@@ -370,6 +370,9 @@ plan: `~/brain/wiki/atomic-wings/muse-integration.md`.
 - Base URL `https://shift-schedule-website.vercel.app/api/v1`. Docs for AI: `/api/v1/docs` (raw
   Markdown, no JavaScript needed). Docs for people: `/api-docs` (public React page, no sign in).
   OpenAPI: `/api/v1/openapi.json`.
+- Fallback if the Settings card ever fails: node scripts/create_api_key.mjs <account email> [name] [read|read_write]
+  (prints the key once; needs .env.local). The card itself was not exercised end to end on 2026-10-04
+  because that needs a real sign in; everything behind it is tested.
 - Keys: website Settings > "API access" card (create, copy once, revoke; also lists recent API
   changes with an Undo button). Home page has a small "Connect an AI assistant" link to the docs.
 - One Vercel function: `api/v1/index.js` (router). `vercel.json` rewrites `/api/v1/:path*` to
