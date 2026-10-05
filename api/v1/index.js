@@ -50,10 +50,25 @@ function index() {
   };
 }
 
+// Supabase's free plan pauses a project after 7 days without database queries, which would take
+// the website and this API offline. A Vercel cron (vercel.json "crons") calls this once a day so the
+// database always sees activity, even if nobody uses the site for weeks. It runs one tiny real query.
+async function keepalive() {
+  const { error, count } = await supabase().from('store_settings').select('id', { count: 'exact', head: true });
+  if (error) throw new ApiError(500, 'DATABASE_ERROR', `Keepalive query failed: ${error.message}`);
+  return {
+    status: 200,
+    action: 'keepalive',
+    message: 'Database reached. A daily Vercel cron calls this so the free Supabase project never pauses for inactivity.',
+    data: { ok: true, rows_seen: count ?? null, at: new Date().toISOString() },
+  };
+}
+
 // [method, pattern, handler, options]. Earlier entries win, so fixed paths come before :params.
 const ROUTES = [
   ['GET', '', index, { public: true }],
   ['GET', 'health', () => ({ status: 200, action: 'health', message: 'OK', data: { ok: true } }), { public: true }],
+  ['GET', 'keepalive', keepalive, { public: true, hidden: true }],
   ['GET', 'docs', null, { public: true, special: 'docs' }],
   ['GET', 'openapi.json', null, { public: true, special: 'openapi' }],
 

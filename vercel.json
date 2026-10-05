@@ -12,5 +12,11 @@
       "source": "/((?!api/|@|node_modules).*)",
       "destination": "/index.html"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/keepalive",
+      "schedule": "0 11 * * *"
+    }
   ]
 }

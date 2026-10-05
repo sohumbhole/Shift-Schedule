@@ -439,3 +439,10 @@ otherwise), and it deletes everything it created (rows, storage files, keys). Co
 the rules, dry run, batch, idempotency, copy and clear with undo, undo of undo, account isolation
 (another account's key gets 404 on these rows), read only keys, revoked keys. Last run 2026-10-04:
 87 passed. Use your own account, never the restaurant's.
+
+### Keeping the database awake (2026-10-04)
+Supabase Free pauses a project after 7 days with no database queries, which would take the website
+AND the API offline. Vercel functions themselves never spin down (only a cold start of a second or
+two). vercel.json now has a daily cron (11:00 UTC, 6 AM Champaign; Hobby allows daily only) that calls
+GET /api/v1/keepalive, which runs one tiny real query. Check it in Vercel > Project > Settings > Cron
+Jobs. Before this, only mom's use and the Monday/Thursday PC backups kept the project active.
