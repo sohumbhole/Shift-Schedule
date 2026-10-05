@@ -446,3 +446,8 @@ AND the API offline. Vercel functions themselves never spin down (only a cold st
 two). vercel.json now has a daily cron (11:00 UTC, 6 AM Champaign; Hobby allows daily only) that calls
 GET /api/v1/keepalive, which runs one tiny real query. Check it in Vercel > Project > Settings > Cron
 Jobs. Before this, only mom's use and the Monday/Thursday PC backups kept the project active.
+A second, independent schedule: .github/workflows/keepalive.yml (GitHub Actions, daily 14:17 UTC,
+3 retries, also runnable by hand from the Actions tab). Neither depends on any laptop. If a run
+fails, GitHub emails Sohum, which doubles as basic downtime monitoring. The repo is private, so
+GitHub's 60 day auto disable for inactive public repos does not apply (about 30 of 2,000 free
+Actions minutes a month).
