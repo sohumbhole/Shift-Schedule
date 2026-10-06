@@ -453,14 +453,14 @@ GitHub's 60 day auto disable for inactive public repos does not apply (about 30 
 Actions minutes a month).
 
 ## Session: 2026-10-06 (handoff to Kavita's Claude, repository going public)
-- Kavita takes over requesting and shipping changes through her own Claude Code.  (loaded
-  automatically by Claude Code;  points other agents to it) holds the routine for every change.
+- Kavita takes over requesting and shipping changes through her own Claude Code. `CLAUDE.md` (loaded
+  automatically by Claude Code; `AGENTS.md` points other agents to it) holds the routine for every change.
 - Decision: make this repository PUBLIC so commits by collaborators deploy on Vercel's free Hobby plan
   (Hobby blocks other people's commits only on private repositories). Vercel stays on Sohum's account and
   the site address does not change. Kavita (GitHub kavitavenkatesh) is a collaborator with push access;
   both are Owners of the Supabase organization. No Vercel key is shared.
 - Checked before going public: no keys, tokens, passwords or connection strings anywhere in the 49
-  commit history; the only email in history is Sohum's (the site's sender).  is
+  commit history; the only email in history is Sohum's (the site's sender). `.vercel/project.json` is
   tracked but holds only project and org ids (not secrets).
 - Keep on: Vercel Git Fork Protection (default on), so pull requests from strangers' forks never build
   with the project's secret environment variables.
