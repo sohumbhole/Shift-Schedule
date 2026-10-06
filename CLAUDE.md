@@ -37,13 +37,27 @@ Read this file, then `CONTEXT.md` (the full technical history and gotchas) befor
    on the live website?" Do not publish without their yes.
 7. Commit with a clear message and `git push origin main`. Every push to `main` deploys the live site
    on Vercel automatically within about a minute.
-8. Confirm it is live: open https://shift-schedule-website.vercel.app (and the changed page) and check
-   the change is there. Then tell her it is done.
+8. Confirm it is live. Vercel reports each deploy as a check on the commit; read it with
+   `gh api repos/sohumbhole/Shift-Schedule/commits/<commit sha>/status` (state "success" means live,
+   "failure" means the build broke). Then open https://shift-schedule-website.vercel.app (and the
+   changed page), check the change is there, and tell her it is done.
 9. Add a short entry to `CONTEXT.md` (date, what changed, why) and commit it.
 
-If the deploy does not show up after a few minutes, Vercel may have blocked it (the free Vercel plan
-only deploys changes made by the account owner). Do not retry in a loop. Tell her plainly: "The change
-is saved but not live yet; Sohum needs to approve it on Vercel," and tell Sohum the commit.
+If the deploy fails, read the error from the commit check, fix it locally, test again, and push the
+fix. The previous version stays live until a deploy succeeds, so a failed deploy never breaks the site.
+Do not retry the same thing in a loop; if you cannot fix it, tell her plainly and message Sohum.
+No Vercel login or Vercel key is needed: pushes from Kavita and Sohum both deploy automatically
+because this repository is public (Vercel's free plan only deploys other people's commits on public
+repositories).
+
+## This repository is PUBLIC
+
+Anyone on the internet can read every file and every past commit, forever. Before every commit:
+- Check the changes contain no secrets (keys, tokens, passwords, connection strings), no personal data
+  about staff or customers, and no `.env` files. Once pushed, assume it was copied within minutes;
+  deleting it later does not help. If a secret ever slips into a commit, tell Sohum immediately so the
+  key can be replaced.
+- Keep business details in her private brain, not in this repository.
 
 ## Hard rules
 
@@ -56,6 +70,10 @@ is saved but not live yet; Sohum needs to approve it on Vercel," and tell Sohum 
 - Do not break the API that her Muse uses (`/api/v1`, code in `api/`). If you change it, keep old
   behavior working, update the docs in `src/lib/apiDocs.js` and `api/_lib/openapi.js`, and run
   `node scripts/tests/api_integration.mjs` with `API_TEST_EMAIL` set to a TEST account (never hers).
+- Database structure changes (new columns or tables) can be run with her own Supabase personal access
+  token (Supabase dashboard, Account, Access Tokens) through the Supabase Management API, or in the
+  dashboard's SQL editor. Back up first, follow the safe pattern in `CONTEXT.md`, and ask her before
+  running anything.
 - Do not remove the keepalive (`vercel.json` crons and `.github/workflows/keepalive.yml`); it stops the
   free database from pausing.
 - No em dashes or en dashes anywhere (code, comments, text on the site). Use commas, periods or colons.
