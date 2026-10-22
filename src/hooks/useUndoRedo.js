@@ -6,6 +6,15 @@ import { useUndoHistory } from "@/lib/undoHistory";
 import { useDashboardNav } from "@/lib/dashboardNav";
 import { createPageUrl } from "@/utils";
 
+// Shifts on one day, or from weekStart (inclusive) to weekEnd (exclusive), straight from the database.
+// The website only keeps a few months of shifts in memory, so undo never relies on that cache.
+const shiftsOnDay = (dateStr) => {
+  const next = new Date(dateStr + "T00:00:00"); next.setDate(next.getDate() + 1);
+  const pad = (n) => String(n).padStart(2, "0");
+  return api.entities.Shift.listRange(dateStr, `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`);
+};
+const shiftsInRange = (from, toExclusive) => api.entities.Shift.listRange(from, toExclusive);
+
 // Executes one undo or redo operation against the server, then invalidates
 // the relevant React Query caches. The entry object is mutated in place to
 // update IDs that change when items are recreated (e.g. after a delete+undo,
@@ -137,8 +146,7 @@ async function applyEntry(entry, direction, { queryClient, dashboardNav, navigat
         if (data.timeOffs.length > 0) await api.entities.TimeOff.bulkCreate(data.timeOffs);
       } else {
         // Re-clear the day by date (don't rely on stale IDs)
-        const allShifts = await api.entities.Shift.list();
-        for (const s of allShifts.filter((s) => s.date === data.date)) {
+        for (const s of await shiftsOnDay(data.date)) {
           await api.entities.Shift.delete(s.id);
         }
         const allTimeOffs = await api.entities.TimeOff.list();
@@ -158,8 +166,7 @@ async function applyEntry(entry, direction, { queryClient, dashboardNav, navigat
       } else {
         const wStart = new Date(data.weekStart + "T00:00:00");
         const wEnd = new Date(data.weekEnd + "T00:00:00");
-        const allShifts = await api.entities.Shift.list();
-        for (const s of allShifts.filter((s) => { const d = new Date(s.date + "T00:00:00"); return d >= wStart && d < wEnd; })) {
+        for (const s of await shiftsInRange(data.weekStart, data.weekEnd)) {
           await api.entities.Shift.delete(s.id);
         }
         const allTimeOffs = await api.entities.TimeOff.list();
@@ -181,8 +188,7 @@ async function applyEntry(entry, direction, { queryClient, dashboardNav, navigat
         // Delete what was copied in, then restore what was there originally
         const wStart = new Date(data.weekStart + "T00:00:00");
         const wEnd = new Date(data.weekEnd + "T00:00:00");
-        const allShifts = await api.entities.Shift.list();
-        for (const s of allShifts.filter((s) => { const d = new Date(s.date + "T00:00:00"); return d >= wStart && d < wEnd; })) {
+        for (const s of await shiftsInRange(data.weekStart, data.weekEnd)) {
           await api.entities.Shift.delete(s.id);
         }
         const allTimeOffs = await api.entities.TimeOff.list();
@@ -199,8 +205,7 @@ async function applyEntry(entry, direction, { queryClient, dashboardNav, navigat
         // Delete current week content, re-apply the copy
         const wStart = new Date(data.weekStart + "T00:00:00");
         const wEnd = new Date(data.weekEnd + "T00:00:00");
-        const allShifts = await api.entities.Shift.list();
-        for (const s of allShifts.filter((s) => { const d = new Date(s.date + "T00:00:00"); return d >= wStart && d < wEnd; })) {
+        for (const s of await shiftsInRange(data.weekStart, data.weekEnd)) {
           await api.entities.Shift.delete(s.id);
         }
         const allTimeOffs = await api.entities.TimeOff.list();
@@ -221,14 +226,12 @@ async function applyEntry(entry, direction, { queryClient, dashboardNav, navigat
 
     case "COPY_PREV_DAY": {
       if (direction === "backward") {
-        const allShifts = await api.entities.Shift.list();
-        for (const s of allShifts.filter((s) => s.date === data.date)) {
+        for (const s of await shiftsOnDay(data.date)) {
           await api.entities.Shift.delete(s.id);
         }
         if (data.originalShifts.length > 0) await api.entities.Shift.bulkCreate(data.originalShifts);
       } else {
-        const allShifts = await api.entities.Shift.list();
-        for (const s of allShifts.filter((s) => s.date === data.date)) {
+        for (const s of await shiftsOnDay(data.date)) {
           await api.entities.Shift.delete(s.id);
         }
         if (data.shiftsToCreate.length > 0) await api.entities.Shift.bulkCreate(data.shiftsToCreate);
@@ -267,8 +270,7 @@ async function applyEntry(entry, direction, { queryClient, dashboardNav, navigat
         queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
       } else {
         // Cascade delete: remove their shifts and time offs first, then the employee
-        const allShifts = await api.entities.Shift.list();
-        for (const s of allShifts.filter((s) => s.employee_id === data.id)) {
+        for (const s of await api.entities.Shift.listByEmployee(data.id)) {
           await api.entities.Shift.delete(s.id);
         }
         const allTimeOffs = await api.entities.TimeOff.list();

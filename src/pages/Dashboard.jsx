@@ -3,6 +3,7 @@ import { api } from "@/api/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { startOfWeek, addWeeks, subWeeks, addDays, format, subDays, isSameDay } from "date-fns";
 import { useUndoHistory } from "@/lib/undoHistory";
+import { neededShiftMonths, useShiftMonths, monthsBetween, ensureShiftsBetween, refreshShiftMonths } from "@/lib/shiftMonths";
 import { useDashboardNav } from "@/lib/dashboardNav";
 import WeekNav from "../components/dashboard/WeekNav";
 import CalendarGrid from "../components/dashboard/CalendarGrid";
@@ -131,10 +132,28 @@ export default function Dashboard() {
     });
   })();
 
-  const { data: shifts = [], isLoading: loadingShifts } = useQuery({
-    queryKey: ["shifts"],
-    queryFn: () => api.entities.Shift.list(),
-  });
+  // Shifts load one month at a time (see src/lib/shiftMonths.js): the months around the week on
+  // screen and around today. Moving into a month not loaded yet fetches it in the background while
+  // the page stays usable; the grid shows "Loading shifts" until the viewed week's months are in.
+  const shiftMonths = useShiftMonths(neededShiftMonths({ weekStart, selectedDay }));
+  const shifts = shiftMonths.shifts;
+  const viewMonths = [
+    ...monthsBetween(addDays(weekStart, -1), addDays(weekStart, 6)),
+    ...(selectedDay ? monthsBetween(addDays(selectedDay, -1), selectedDay) : []),
+  ];
+  const viewLoaded = viewMonths.every((k) => shiftMonths.loaded[k]);
+  const loadingShifts = !viewLoaded;
+
+  // Optimistic edits touch every loaded month (a shift lives in exactly one of them).
+  const snapshotShiftMonths = async () => {
+    await queryClient.cancelQueries({ queryKey: ["shifts"] });
+    return queryClient.getQueriesData({ queryKey: ["shifts"] });
+  };
+  const editShiftMonths = (fn) =>
+    queryClient.setQueriesData({ queryKey: ["shifts"] }, (old) => (old ? fn(old) : old));
+  const restoreShiftMonths = (snapshot) => {
+    for (const [key, data] of snapshot || []) queryClient.setQueryData(key, data);
+  };
 
   const { data: timeOffs = [] } = useQuery({
     queryKey: ["timeOffs"],
@@ -184,7 +203,7 @@ export default function Dashboard() {
   const createShift = useMutation({
     mutationFn: (data) => api.entities.Shift.create(data),
     onSuccess: (created, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["shifts"] });
+      refreshShiftMonths(queryClient, [created.date]);
       history.push({
         type: "ADD_SHIFT",
         description: `Added shift for ${created.employee_name || "employee"}`,
@@ -201,17 +220,12 @@ export default function Dashboard() {
     // origData is the shift before the update - used for the undo entry
     mutationFn: ({ id, data }) => api.entities.Shift.update(id, data),
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: ["shifts"] });
-      const previousShifts = queryClient.getQueryData(["shifts"]);
-      queryClient.setQueryData(["shifts"], (old) =>
-        (old || []).map((s) => s.id === id ? { ...s, ...data } : s)
-      );
+      const previousShifts = await snapshotShiftMonths();
+      editShiftMonths((old) => old.map((s) => s.id === id ? { ...s, ...data } : s));
       return { previousShifts };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previousShifts) {
-        queryClient.setQueryData(["shifts"], context.previousShifts);
-      }
+      restoreShiftMonths(context?.previousShifts);
     },
     onSuccess: (_, variables) => {
       const { id, data, origData } = variables;
@@ -234,8 +248,8 @@ export default function Dashboard() {
         forward: { id, ...data },
       });
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["shifts"] });
+    onSettled: (_data, _err, variables) => {
+      refreshShiftMonths(queryClient, [variables?.origData?.date, variables?.data?.date]);
     },
   });
 
@@ -243,15 +257,12 @@ export default function Dashboard() {
   const deleteShift = useMutation({
     mutationFn: ({ id }) => api.entities.Shift.delete(id),
     onMutate: async ({ id }) => {
-      await queryClient.cancelQueries({ queryKey: ["shifts"] });
-      const previousShifts = queryClient.getQueryData(["shifts"]);
-      queryClient.setQueryData(["shifts"], (old) => (old || []).filter((s) => s.id !== id));
+      const previousShifts = await snapshotShiftMonths();
+      editShiftMonths((old) => old.filter((s) => s.id !== id));
       return { previousShifts };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previousShifts) {
-        queryClient.setQueryData(["shifts"], context.previousShifts);
-      }
+      restoreShiftMonths(context?.previousShifts);
     },
     onSuccess: (_, variables) => {
       const s = variables.shift;
@@ -274,8 +285,8 @@ export default function Dashboard() {
         forward: { id: s.id },
       });
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["shifts"] });
+    onSettled: (_data, _err, variables) => {
+      refreshShiftMonths(queryClient, [variables?.shift?.date]);
     },
   });
 
@@ -408,10 +419,8 @@ export default function Dashboard() {
 
   const handleClearWeek = async () => {
     const weekEndDate = addWeeks(weekStart, 1);
-    const weekShifts = shifts.filter((s) => {
-      const d = new Date(s.date + "T00:00:00");
-      return d >= weekStart && d < weekEndDate;
-    });
+    // Read the week through ensureShiftsBetween so a month still loading is waited for, not skipped.
+    const weekShifts = await ensureShiftsBetween(queryClient, format(weekStart, "yyyy-MM-dd"), format(addDays(weekStart, 6), "yyyy-MM-dd"));
     const weekTimeOffs = timeOffs.filter((t) => {
       if (t.type !== "regular_off") return false;
       const d = new Date((t.date || t.start_date) + "T00:00:00");
@@ -426,7 +435,7 @@ export default function Dashboard() {
 
     for (const s of weekShifts) await api.entities.Shift.delete(s.id);
     for (const t of weekTimeOffs) await api.entities.TimeOff.delete(t.id);
-    queryClient.invalidateQueries({ queryKey: ["shifts"] });
+    refreshShiftMonths(queryClient, [format(weekStart, "yyyy-MM-dd"), format(addDays(weekStart, 6), "yyyy-MM-dd")]);
     queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
 
     if (savedShifts.length > 0 || savedTimeOffs.length > 0) {
@@ -446,7 +455,7 @@ export default function Dashboard() {
   const handleClearDay = async () => {
     if (!selectedDay) return;
     const dayStr = format(selectedDay, "yyyy-MM-dd");
-    const dayShifts = shifts.filter((s) => s.date === dayStr);
+    const dayShifts = await ensureShiftsBetween(queryClient, dayStr, dayStr);
     const dayTimeOffs = timeOffs.filter((t) => (t.date || t.start_date) === dayStr && t.type === "regular_off");
 
     const savedShifts = dayShifts.map(({ employee_id, employee_name, date, start_time, end_time, color, tentative }) =>
@@ -456,7 +465,7 @@ export default function Dashboard() {
 
     for (const s of dayShifts) await api.entities.Shift.delete(s.id);
     for (const t of dayTimeOffs) await api.entities.TimeOff.delete(t.id);
-    queryClient.invalidateQueries({ queryKey: ["shifts"] });
+    refreshShiftMonths(queryClient, [dayStr]);
     queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
 
     if (savedShifts.length > 0 || savedTimeOffs.length > 0) {
@@ -477,7 +486,10 @@ export default function Dashboard() {
     const prevWeekEnd = addWeeks(prevWeekStart, 1);
     const currWeekEnd = addWeeks(weekStart, 1);
 
-    const currShifts = shifts.filter((s) => { const d = new Date(s.date + "T00:00:00"); return d >= weekStart && d < currWeekEnd; });
+    // Both weeks are read through ensureShiftsBetween so a month still loading is waited for.
+    const fmtDay = (d) => format(d, "yyyy-MM-dd");
+    const currShifts = await ensureShiftsBetween(queryClient, fmtDay(weekStart), fmtDay(addDays(weekStart, 6)));
+    const prevShifts = await ensureShiftsBetween(queryClient, fmtDay(prevWeekStart), fmtDay(addDays(prevWeekStart, 6)));
     const currTimeOffs = timeOffs.filter((t) => {
       if (t.type !== "regular_off") return false;
       const d = new Date((t.date || t.start_date) + "T00:00:00");
@@ -493,7 +505,6 @@ export default function Dashboard() {
     for (const s of currShifts) await api.entities.Shift.delete(s.id);
     for (const t of currTimeOffs) await api.entities.TimeOff.delete(t.id);
 
-    const prevShifts = shifts.filter((s) => { const d = new Date(s.date + "T00:00:00"); return d >= prevWeekStart && d < prevWeekEnd; });
     const newShifts = prevShifts.map(({ employee_id, employee_name, start_time, end_time, color, date, tentative }) => {
       const nd = new Date(date + "T00:00:00"); nd.setDate(nd.getDate() + 7);
       return { employee_id, employee_name, start_time, end_time, color, tentative, date: format(nd, "yyyy-MM-dd") };
@@ -511,7 +522,7 @@ export default function Dashboard() {
     });
     if (newTimeOffs.length > 0) await api.entities.TimeOff.bulkCreate(newTimeOffs);
 
-    queryClient.invalidateQueries({ queryKey: ["shifts"] });
+    refreshShiftMonths(queryClient, [fmtDay(weekStart), fmtDay(addDays(weekStart, 6))]);
     queryClient.invalidateQueries({ queryKey: ["timeOffs"] });
 
     const wStartStr = format(weekStart, "yyyy-MM-dd");
@@ -532,18 +543,18 @@ export default function Dashboard() {
     const prevDateStr = format(prevDay, "yyyy-MM-dd");
     const todayDateStr = format(selectedDay, "yyyy-MM-dd");
 
-    const todayShifts = shifts.filter((s) => s.date === todayDateStr);
+    const todayShifts = await ensureShiftsBetween(queryClient, todayDateStr, todayDateStr);
+    const prevShifts = await ensureShiftsBetween(queryClient, prevDateStr, prevDateStr);
     const savedTodayShifts = todayShifts.map(({ employee_id, employee_name, date, start_time, end_time, color, tentative }) =>
       ({ employee_id, employee_name, date, start_time, end_time, color, tentative }));
 
     for (const s of todayShifts) await api.entities.Shift.delete(s.id);
 
-    const prevShifts = shifts.filter((s) => s.date === prevDateStr);
     const newShifts = prevShifts.map(({ employee_id, employee_name, start_time, end_time, color, tentative }) =>
       ({ employee_id, employee_name, start_time, end_time, color, tentative, date: todayDateStr }));
     if (newShifts.length > 0) await api.entities.Shift.bulkCreate(newShifts);
 
-    queryClient.invalidateQueries({ queryKey: ["shifts"] });
+    refreshShiftMonths(queryClient, [todayDateStr]);
 
     history.push({
       type: "COPY_PREV_DAY",
@@ -587,12 +598,12 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", handler);
   }, [isReorderMode, handleCancelReorder]);
 
-  const isLoading = loadingEmp || loadingShifts;
+  // Only the employee list blocks the page. Shifts fill in as their months arrive (see above).
+  const isLoading = loadingEmp;
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   // weekShifts is filtered to the currently viewed week - used for both shift count and hours.
-  // shifts (from React Query) contains ALL historical shifts with no date filter, so using
-  // shifts.length directly would show all-time counts instead of this week only.
+  // shifts holds every loaded month (several weeks), so shifts.length would overcount.
   const weekShifts = shifts.filter(s => weekDays.some(d => isSameDay(new Date(s.date + "T00:00:00"), d)));
   const weekTotalHours = weekShifts.reduce((sum, s) => {
     if (s.tentative) return sum; // backup shifts do not count toward hours
@@ -611,7 +622,9 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
           <p className="text-sm text-gray-400 mt-1">
-            {employees.length} employee{employees.length !== 1 ? "s" : ""} - {weekShifts.length} shift{weekShifts.length !== 1 ? "s" : ""} this week - {weekTotalHoursDisplay} hrs this week
+            {employees.length} employee{employees.length !== 1 ? "s" : ""} - {viewLoaded
+              ? <>{weekShifts.length} shift{weekShifts.length !== 1 ? "s" : ""} this week - {weekTotalHoursDisplay} hrs this week</>
+              : "loading this week's shifts"}
           </p>
         </div>
       </div>
@@ -672,11 +685,30 @@ export default function Dashboard() {
         )}
       </div>
 
+      {!isLoading && !viewLoaded && (
+        <div className="mb-3 flex items-center justify-center gap-2 text-sm">
+          {shiftMonths.failed && !shiftMonths.isFetching ? (
+            <span className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200">
+              Could not load shifts for this week.
+              <button onClick={shiftMonths.refetchFailed} className="underline font-medium">Try again</button>
+            </span>
+          ) : (
+            <span className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 text-orange-600 border border-orange-200">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading shifts...
+            </span>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center py-32">
           <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
         </div>
-      ) : selectedDay ? (
+      ) : (
+      // Until this week's shifts arrive the grid is faded and ignores clicks, so nothing can be
+      // added on top of shifts that are not shown yet. The week arrows above keep working.
+      <div className={viewLoaded ? undefined : "opacity-50 pointer-events-none select-none"} aria-busy={!viewLoaded}>
+      {selectedDay ? (
        <DayView
           day={selectedDay}
           shifts={shifts}
@@ -737,6 +769,8 @@ export default function Dashboard() {
        isReorderMode={isReorderMode}
        onReorder={handleReorder}
        />
+      )}
+      </div>
       )}
 
       <AlertDialog open={copyConfirmOpen} onOpenChange={setCopyConfirmOpen}>

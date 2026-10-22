@@ -486,3 +486,28 @@ Actions minutes a month).
   Cost: one extra request per 1000 rows, invisible to the user.
 - Gotcha for the future: NEVER read a Supabase table with a plain `.select()` and assume it is complete.
   Use `fetchAll` (website) or `scopedDb.fetchAll` (API), or filter to a date range.
+
+## Session: 2026-10-22 (load shifts one month at a time)
+- Why: the website loaded every shift ever made on each page load and after every edit (paged in
+  blocks of 1000 since the fix above). That grows forever. Sohum asked for loading only what is needed,
+  without many small requests and without the page freezing while data loads.
+- How it works now (`src/lib/shiftMonths.js`): each calendar month is its own cached query
+  `["shifts", "yyyy-MM"]` read with `Shift.listRange(from, toExclusive)`. The Dashboard keeps loaded:
+  the viewed month plus one each side, the viewed week plus the week before and after, the selected day
+  and the day before it, and TODAY's month plus one each side. So:
+  - a reload on an old week loads that week's months AND today's months, so "Today" is instant;
+  - moving week to week inside loaded months makes no request; entering a new month fetches only the
+    months not loaded yet (usually one), in the background;
+  - months already seen stay cached 30 minutes (re-checked in the background after 2 minutes);
+  - while the viewed week's months are loading, the page does NOT block: a "Loading shifts..." badge
+    shows, the grid is faded and ignores clicks (so nothing is added on top of unseen shifts), and the
+    week arrows keep working. If a month fails to load, the badge offers "Try again".
+- Copy and clear (week and day) read their weeks through `ensureShiftsBetween`, which waits for any
+  month still loading, so they never act on missing data. Undo and redo and delete employee now ask the
+  database directly (`listRange`, `listByEmployee`) instead of downloading every shift.
+- After an edit only the edited month is refetched (`refreshShiftMonths`). Live refresh (Muse changes)
+  and the API card still invalidate `["shifts"]`, which refreshes every loaded month.
+- Not changed: time off and events still load in full (small tables, paged by fetchAll). The API
+  (`/api/v1`) is untouched.
+- Test: `scripts/tests/month_loading_browser.mjs` (browser, mock mode, 20 checks: request counts,
+  slow loading, reload on an old week, Today, copy and clear across a month boundary, delete, undo).

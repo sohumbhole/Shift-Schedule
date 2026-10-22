@@ -75,13 +75,21 @@ const StoreSettingsApi = {
   },
 };
 
+const ShiftApi = {
+  ...entityMock("shifts"),
+  listRange: (from, toExclusive) =>
+    Promise.resolve(store.shifts.filter((s) => s.date >= from && s.date < toExclusive)),
+  listByEmployee: (employeeId) =>
+    Promise.resolve(store.shifts.filter((s) => s.employee_id === employeeId)),
+};
+
 const EventApi = entityMock("events");
 delete EventApi.bulkCreate;
 
 export const mockApi = {
   entities: {
     Employee: entityMock("employees"),
-    Shift: entityMock("shifts"),
+    Shift: ShiftApi,
     TimeOff: entityMock("timeOffs"),
     Event: EventApi,
     StoreSettings: StoreSettingsApi,

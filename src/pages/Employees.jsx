@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { api } from "@/api/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUndoHistory } from "@/lib/undoHistory";
@@ -65,13 +65,12 @@ export default function Employees() {
   // then the employee. Stores everything for undo.
   const handleDeleteEmployee = async (id) => {
     const emp = rawEmployees.find((e) => e.id === id);
-    // Fetch from cache if available, otherwise fetch from server
-    let allShifts = queryClient.getQueryData(["shifts"]);
-    if (!allShifts) allShifts = await api.entities.Shift.list();
+    // Shifts come straight from the database: the Dashboard only keeps a few months in memory.
+    const empShifts = await api.entities.Shift.listByEmployee(id);
+    // Time offs: from cache if available, otherwise from the server
     let allTimeOffs = queryClient.getQueryData(["timeOffs"]);
     if (!allTimeOffs) allTimeOffs = await api.entities.TimeOff.list();
 
-    const empShifts = allShifts.filter((s) => s.employee_id === id);
     const empTimeOffs = allTimeOffs.filter((t) => t.employee_id === id);
 
     // Save payloads (no id/user_id/created_date) for undo recreation

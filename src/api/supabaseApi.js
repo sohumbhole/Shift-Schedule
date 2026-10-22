@@ -89,6 +89,29 @@ export const supabaseApi = {
           .order('id'));
         return toAppRows(data);
       },
+      // Shifts with from <= date < toExclusive (dates as yyyy-MM-dd). The website loads shifts one
+      // month at a time with this (see src/lib/shiftMonths.js) instead of the whole history.
+      listRange: async (from, toExclusive) => {
+        const data = await fetchAll(() => supabase
+          .from('shifts')
+          .select('*')
+          .gte('date', from)
+          .lt('date', toExclusive)
+          .order('date')
+          .order('start_time')
+          .order('id'));
+        return toAppRows(data);
+      },
+      // Every shift of one employee (used when deleting an employee).
+      listByEmployee: async (employeeId) => {
+        const data = await fetchAll(() => supabase
+          .from('shifts')
+          .select('*')
+          .eq('employee_id', employeeId)
+          .order('date')
+          .order('id'));
+        return toAppRows(data);
+      },
       create: async (payload) => {
         const user_id = await getUserId();
         const { data, error } = await supabase
