@@ -1,4 +1,9 @@
 import { supabase } from '@/lib/supabaseClient';
+import { fetchAll } from '@/lib/fetchAll';
+
+// Every list below goes through fetchAll: Supabase returns at most 1000 rows per request, silently.
+// One plain select cut off the newest shifts once the account passed 1000 of them (2026-10-22).
+// Each ORDER BY ends with `id` so paging is stable (see src/lib/fetchAll.js).
 
 function toAppRow(row) {
   if (!row) return row;
@@ -35,11 +40,11 @@ export const supabaseApi = {
   entities: {
     Employee: {
       list: async () => {
-        const { data, error } = await supabase
+        const data = await fetchAll(() => supabase
           .from('employees')
           .select('*')
-          .order('created_at', { ascending: true });
-        if (error) throw error;
+          .order('created_at', { ascending: true })
+          .order('id'));
         return toAppRows(data);
       },
       create: async (payload) => {
@@ -76,12 +81,12 @@ export const supabaseApi = {
     },
     Shift: {
       list: async () => {
-        const { data, error } = await supabase
+        const data = await fetchAll(() => supabase
           .from('shifts')
           .select('*')
           .order('date')
-          .order('start_time');
-        if (error) throw error;
+          .order('start_time')
+          .order('id'));
         return toAppRows(data);
       },
       create: async (payload) => {
@@ -118,11 +123,11 @@ export const supabaseApi = {
     },
     TimeOff: {
       list: async () => {
-        const { data, error } = await supabase
+        const data = await fetchAll(() => supabase
           .from('time_off')
           .select('*')
-          .order('start_date');
-        if (error) throw error;
+          .order('start_date')
+          .order('id'));
         return toAppRows(data);
       },
       create: async (payload) => {
@@ -159,11 +164,11 @@ export const supabaseApi = {
     },
     Event: {
       list: async () => {
-        const { data, error } = await supabase
+        const data = await fetchAll(() => supabase
           .from('events')
           .select('*')
-          .order('start_date', { ascending: true });
-        if (error) throw error;
+          .order('start_date', { ascending: true })
+          .order('id'));
         return toAppRows(data);
       },
       create: async (payload) => {

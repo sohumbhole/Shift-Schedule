@@ -466,3 +466,23 @@ Actions minutes a month).
   with the project's secret environment variables.
 - Caveat: GitHub disables scheduled workflows in PUBLIC repositories after 60 days without commits, so the
   GitHub keepalive can stop on its own; the Vercel cron keeps the database awake regardless.
+
+## Session: 2026-10-22 (shifts missing from the last days of the newest week)
+- Symptom: the week of 2026-10-26 showed one shift on Friday 10/30 (10 AM to 7 PM) and nothing on 10/31
+  and 11/1, in the week view, the day view and the image exports, and nothing on those days could be
+  edited or deleted. The API (Muse) saw every shift, so the data was fine. Telltale sign: "Clear week"
+  removed the visible shifts and then the hidden ones APPEARED (deleting rows brought the account back
+  under the cap), so the week had to be cleared twice.
+- Cause: Supabase's REST layer returns at most 1000 rows per request, silently (the project's "Max rows"
+  setting, default 1000). The website loaded ALL shifts of the account with one request, sorted by date,
+  so once the account passed 1000 shifts (which happened this week) the newest rows were cut off: the
+  1000th row was that Friday 10 AM shift. The API never had this bug because `api/_lib/data.js` pages
+  in blocks of 1000. The first week built through the API (Muse) was a coincidence, not the cause; the
+  row count simply crossed 1000 that week. Time off (about 300 rows) would have hit the same wall in a
+  year or so.
+- Fix: `src/lib/fetchAll.js` pages through a query until a short page comes back; every list in
+  `src/api/supabaseApi.js` (employees, shifts, time off, events) uses it, with `id` as the final ORDER BY
+  so pages never overlap. Test: `node scripts/tests/fetch_all_paging.mjs` (pure unit test, no network).
+  Cost: one extra request per 1000 rows, invisible to the user.
+- Gotcha for the future: NEVER read a Supabase table with a plain `.select()` and assume it is complete.
+  Use `fetchAll` (website) or `scopedDb.fetchAll` (API), or filter to a date range.
