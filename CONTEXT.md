@@ -572,3 +572,11 @@ Actions minutes a month).
 ### 6. Rounded corners back on day view bars (2026-11-16)
 - Sohum preferred rounded corners after all. Bars and the drag ghost are `rounded-lg` again, still
   full row height with no gap (`BAR_PAD` 0, `BAR_BLEED` 1). No shadow.
+
+### 7. Bigger employee names in the day view sidebar, same row height (2026-11-16)
+- Sohum: names were too small to read. Rule: do not make rows taller (the view must stay condensed).
+- The round initial avatar (24 to 32px) is replaced by a 4px stripe in the employee's color down the
+  left edge, and that width goes to the name: 15px in compact rows (was 12px), 16px otherwise (was
+  14px), darker. Title and the day's hours share one small line under it, with the food safety Award
+  icon inline (it used to sit on the avatar). The full title shows now (was cut at 9 characters).
+  Reorder mode uses the same stripe. Row heights unchanged (28px with 19 employees at 1400x900).

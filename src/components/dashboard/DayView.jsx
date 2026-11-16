@@ -398,9 +398,12 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
     return () => window.removeEventListener("resize", fit);
   }, [employees.length]);
   const compact = rowHeight < COMPACT_BELOW;
-  const avatarClass = (compact ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs") + " rounded-full flex items-center justify-center text-white font-bold shrink-0";
-  const nameClass = (compact ? "text-xs leading-tight" : "text-sm") + " font-semibold text-gray-800 truncate";
-  const titleClass = (compact ? "text-[10px] leading-tight" : "text-xs") + " text-gray-400 truncate";
+  // Sidebar (2026-11-16): the round initial avatar is replaced by a 4px stripe in the employee's
+  // color down the left edge. The freed width goes to the name, which is the thing Kavita reads, so
+  // it can be bigger in the same row height: 15px in compact rows (was 12px), 16px otherwise (was
+  // 14px). Title and day hours share one small line under it.
+  const nameClass = (compact ? "text-[15px] leading-4" : "text-base leading-5") + " font-semibold text-gray-900 truncate";
+  const titleClass = (compact ? "text-[10px] leading-3" : "text-[11px] leading-4") + " text-gray-500 truncate";
 
   // Called by ShiftBar when a "move" mousedown happens
   const handleStartMoveDrag = useCallback((e, shift, origEmp, grabOffsetMins) => {
@@ -815,12 +818,10 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                               className={`flex border-b border-gray-200 last:border-b-0 transition-colors ${snapshot.isDragging ? "bg-orange-50/80 shadow-lg border border-orange-200" : "hover:bg-gray-50/20"}`}
                               style={{ height: rowHeight, ...provided.draggableProps.style }}
                             >
-                              <div className="shrink-0 border-r border-gray-100 px-3 flex items-center gap-2.5 relative" style={{ width: SIDEBAR_W }}>
-                                <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500 shrink-0 -ml-1 cursor-grab" />
-                                <div className={avatarClass} style={{ backgroundColor: emp.color || "#FF8C00" }}>
-                                  {emp.name.charAt(0)}
-                                </div>
-                                <div className="overflow-hidden min-w-0" style={{ width: SIDEBAR_W - (compact ? 72 : 80) }}>
+                              <div className="shrink-0 border-r border-gray-100 pl-2.5 pr-2 flex items-center gap-1 relative" style={{ width: SIDEBAR_W }}>
+                                <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: emp.color || "#FF8C00" }} />
+                                <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500 shrink-0 cursor-grab" />
+                                <div className="overflow-hidden min-w-0 flex-1">
                                   <div className={nameClass}>{emp.name}</div>
                                   <div className={titleClass}>{emp.title?.length > 9 ? emp.title.slice(0, 9) + "…" : emp.title}</div>
                                 </div>
@@ -878,28 +879,19 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                   style={{ height: rowHeight }}
                 >
                   {/* Sidebar */}
-                  <div className="shrink-0 border-r border-gray-100 px-3 flex items-center gap-2.5 group/sidebar relative" style={{ width: SIDEBAR_W }}>
-                    <div className="relative">
-                      <div
-                        className={avatarClass}
-                        style={{ backgroundColor: emp.color || "#FF8C00" }}
-                      >
-                        {emp.name.charAt(0)}
-                      </div>
-                      {emp.food_safety_certified && (
-                        <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5 border border-white shadow-sm">
-                          <Award className="w-2.5 h-2.5 text-white" />
-                        </div>
-                      )}
-                    </div>
+                  <div className="shrink-0 border-r border-gray-100 pl-3 pr-6 flex items-center group/sidebar relative" style={{ width: SIDEBAR_W }}>
+                    <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: emp.color || "#FF8C00" }} />
                     <EmployeeTooltip emp={emp}>
-                      <div className="overflow-hidden min-w-0" style={{ width: SIDEBAR_W - (compact ? 60 : 68) }}>
+                      {/* 160 sidebar minus 12 left padding and 24 right (time off icon) */}
+                      <div className="overflow-hidden min-w-0" style={{ width: SIDEBAR_W - 36 }}>
                         <button
                           onClick={(e) => { e.stopPropagation(); navigate(createPageUrl(`Employees?edit=${emp.id}`)); }}
                           className={nameClass + " hover:text-orange-600 transition-colors block cursor-pointer text-left w-full"}
+                          title={emp.name}
                         >{emp.name}</button>
-                        <div className={titleClass}>
-                          {emp.title?.length > 9 ? emp.title.slice(0, 9) + "…" : emp.title}{empHours > 0 ? ` · ${empHours % 1 === 0 ? empHours : empHours.toFixed(1)}h` : ""}
+                        <div className={titleClass + " flex items-center gap-1"}>
+                          {emp.food_safety_certified && <Award className="w-2.5 h-2.5 text-green-600 shrink-0" title="Food safety certified" />}
+                          <span className="truncate">{emp.title}{empHours > 0 ? ` · ${empHours % 1 === 0 ? empHours : empHours.toFixed(1)}h` : ""}</span>
                         </div>
                       </div>
                     </EmployeeTooltip>
