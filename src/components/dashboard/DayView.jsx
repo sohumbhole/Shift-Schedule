@@ -61,6 +61,10 @@ const BAR_PAD = 0;
 // 1px bottom border so bars in neighbouring rows meet. Time off pills keep a small inset.
 const BAR_BLEED = 1;
 const TIME_OFF_PAD = 3;
+// Faint vertical guide lines across every employee row in the day view, so shifts are easy to place
+// against these times at a glance (Sohum, 2026-11-16). Hours on the 24 hour clock.
+const GUIDE_HOURS = [11, 17, 21];
+const GUIDE_COLOR = "rgba(17, 24, 39, 0.35)";
 
 function getHourRange(day, storeSettings) {
   const dayKey = DAY_KEYS[day.getDay()];
@@ -965,6 +969,18 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                           }} />
                         );
                       })}
+
+                    {/* Guide lines at GUIDE_HOURS, drawn over the bars but never catching clicks */}
+                    {GUIDE_HOURS.map((h) => {
+                      const mins = h * 60 - startHour * 60;
+                      if (mins <= 0 || mins >= totalMinutes) return null;
+                      return (
+                        <div key={`guide-${h}`} className="absolute pointer-events-none" style={{
+                          left: `${(mins / totalMinutes) * 100}%`, top: 0, bottom: -1, width: 2,
+                          marginLeft: -1, backgroundColor: GUIDE_COLOR, zIndex: 5,
+                        }} />
+                      );
+                    })}
 
                     {/* Shift bars */}
                     {empShifts.map((shift) => (

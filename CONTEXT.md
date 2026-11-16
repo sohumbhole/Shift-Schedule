@@ -550,3 +550,9 @@ Actions minutes a month).
 - `DayView.jsx`: `BAR_PAD` is 0 and `BAR_BLEED` (1px) pulls each bar over its row's bottom border so
   bars in neighbouring rows meet. Bars and the drag ghost lost `rounded-lg` and the bar shadow; times
   and hours are `text-sm` (were `text-xs`). Time off pills keep a 3px inset (`TIME_OFF_PAD`).
+
+### 4. Guide lines in the day view (2026-11-16)
+- Sohum: faint vertical lines at 11 AM, 5 PM and 9 PM across every day view, so shifts are easy to
+  read against those times. `GUIDE_HOURS` and `GUIDE_COLOR` (dark at 35% opacity, 2px) in
+  `DayView.jsx`. Drawn over the bars with the same minute math as the bars, so they line up with
+  shift edges exactly; they ignore clicks and drags. Skipped when a time is outside that day's timeline.
