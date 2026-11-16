@@ -114,7 +114,7 @@ export function buildOpenApi() {
       },
       '/availability': {
         get: op('Who can work a slot', 'Status per employee: free, possible_with_warnings, busy; with reasons and weekly hours.', {
-          parameters: [q('date', 'YYYY-MM-DD', { type: 'string' }, true), q('start_time', 'HH:MM', { type: 'string' }, true), q('end_time', 'HH:MM', { type: 'string' }, true), q('title', 'Only employees whose title contains this')],
+          parameters: [q('date', 'YYYY-MM-DD', { type: 'string' }, true), q('start_time', 'HH:MM', { type: 'string' }, true), q('end_time', 'HH:MM', { type: 'string' }, true), q('title', 'Only employees whose title contains this'), q('include_inactive', 'true to include inactive employees (default false)')],
         }),
       },
       '/shifts': {
@@ -149,7 +149,7 @@ export function buildOpenApi() {
         }),
       },
       '/employees': {
-        get: op('List employees', 'In website order, with weekly hours.', { parameters: [q('q', 'Name contains'), q('title', 'Title contains'), q('food_safety_certified', 'true or false'), q('week', 'Week for the hours (default this week)')] }),
+        get: op('List employees', 'In website order, with weekly hours.', { parameters: [q('q', 'Name contains'), q('title', 'Title contains'), q('food_safety_certified', 'true or false'), q('inactive', 'true or false'), q('week', 'Week for the hours (default this week)')] }),
         post: op('Add an employee', 'name, title and min_hours are required.', {
           requestBody: body({ name: str(''), title: str(''), min_hours: { type: 'number' }, max_hours: { type: 'number' }, available_hours: str('Free text'), unavailable_hours: { type: 'array', items: { type: 'object', properties: { day: str('e.g. Saturday'), start_time: str(''), end_time: str('') } } }, food_safety_certified: bool(''), inactive: bool('Hidden on the website dashboard'), notes: str(''), color: str('Hex like #3B82F6'), ...DRY }, ['name', 'title', 'min_hours']),
         }),

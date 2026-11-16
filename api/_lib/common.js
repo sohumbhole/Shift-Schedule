@@ -26,7 +26,12 @@ export async function base(ctx) {
   if (!ctx._base) {
     ctx._base = (async () => {
       const [settings, rawEmployees] = await Promise.all([ctx.db.settings(), ctx.db.employees()]);
-      const employees = orderEmployees(rawEmployees, settings);
+      // `inactive` is a real column since 2026-11-16. For one hour before that the website kept
+      // inactive ids in settings.metadata.inactive_employee_ids; the website moves them onto the rows
+      // the next time the Employees page opens. Until then, count them as inactive here too.
+      const legacy = new Set(Array.isArray(settings?.metadata?.inactive_employee_ids) ? settings.metadata.inactive_employee_ids : []);
+      const marked = legacy.size ? rawEmployees.map((e) => (legacy.has(e.id) ? { ...e, inactive: true } : e)) : rawEmployees;
+      const employees = orderEmployees(marked, settings);
       return { settings, employees, empIdx: employeeIndex(employees) };
     })();
   }

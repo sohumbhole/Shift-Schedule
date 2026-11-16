@@ -610,3 +610,9 @@ Actions minutes a month).
   the person to the bottom of `employee_order` (`moveToBottom`).
 - API: employees have an `inactive` field (read, POST, PATCH), and a shift for an inactive employee
   gets the warning `EMPLOYEE_INACTIVE` (not blocked). Docs updated in `apiDocs.js` and `openapi.js`.
+- Follow up the same day: `GET /employees` filters by `inactive=true|false` and its message counts
+  inactive people. `GET /availability` leaves inactive employees out unless `include_inactive=true`
+  (then they carry an `INACTIVE` reason) or they already work that day, and every row has
+  `inactive`. `base()` in `api/_lib/common.js` also treats ids on the legacy settings list as
+  inactive until the website migrates them. Test: `node scripts/tests/api_inactive_unit.mjs`
+  (13 checks, in memory fake database, no network).

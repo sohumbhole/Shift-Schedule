@@ -173,8 +173,9 @@ GET /schedule?preset=next_week&tentative=true
 \`\`\`
 
 **GET /availability**: who can work a slot. Query: \`date\`, \`start_time\`, \`end_time\`, optional
-\`title\`. Each employee gets \`status\`: \`free\`, \`possible_with_warnings\` (time off, marked
-unavailable, or over max hours) or \`busy\` (already working), with reasons and their weekly hours.
+\`title\`, \`include_inactive\` (default false: inactive employees are left out unless they already
+work that day). Each employee gets \`status\`: \`free\`, \`possible_with_warnings\` (time off, marked
+unavailable, inactive, or over max hours) or \`busy\` (already working), with reasons and their weekly hours.
 Sorted with free people with the fewest hours first.
 \`\`\`
 GET /availability?date=2026-10-10&start_time=17:00&end_time=23:00&title=cook
@@ -185,7 +186,8 @@ GET /availability?date=2026-10-10&start_time=17:00&end_time=23:00&title=cook
 **GET /shifts/{id}**: one shift with its day and the employee's week.
 
 **GET /employees**: everyone in the website's display order, with this week's hours (\`week\` to pick
-another week). Filters: \`q\` (name contains), \`title\`, \`food_safety_certified\`.
+another week). Filters: \`q\` (name contains), \`title\`, \`food_safety_certified\`, \`inactive\`
+(\`true\` or \`false\`). Every employee has \`inactive\` (true = hidden on the website dashboard).
 **GET /employees/{id or name}**: one employee with their week (\`week\` optional) and time off in the
 next 60 days.
 

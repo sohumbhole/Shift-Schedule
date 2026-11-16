@@ -104,6 +104,10 @@ export async function listEmployees(ctx) {
     const want = parseBool(q.food_safety_certified, 'food_safety_certified');
     list = list.filter(({ e }) => !!e.food_safety_certified === want);
   }
+  if (q.inactive !== undefined && q.inactive !== '') {
+    const want = parseBool(q.inactive, 'inactive');
+    list = list.filter(({ e }) => !!e.inactive === want);
+  }
   const week = q.week ? weekStartOf(parseDate(q.week, 'week', ctx.today)) : weekStartOf(ctx.today);
   const shifts = await ctx.db.shifts({ start: week, end: addDays(week, 6) });
   const out = list.map(({ e, i }) => {
@@ -114,7 +118,7 @@ export async function listEmployees(ctx) {
   return {
     status: 200,
     action: 'employees.list',
-    message: `${plural(out.length, 'employee')}${q.q || q.title ? ' matching the filter' : ''}, in the order the website shows them. Hours are for the week of ${dateLabel(week)}.`,
+    message: `${plural(out.length, 'employee')}${q.q || q.title || q.inactive ? ' matching the filter' : ''}, in the order the website shows them${out.some((x) => x.inactive) ? ` (${out.filter((x) => x.inactive).length} marked inactive, hidden on the website dashboard)` : ''}. Hours are for the week of ${dateLabel(week)}.`,
     data: { employees: out, week: { start: week, end: addDays(week, 6) } },
   };
 }
@@ -258,14 +262,21 @@ export async function getAvailability(ctx) {
     ctx.db.shifts({ start: wk, end: addDays(wk, 6) }),
     ctx.db.timeOff({ start: date, end: date }),
   ]);
+  // Inactive employees are left out unless include_inactive=true (then they come back with an
+  // INACTIVE reason). Someone already working that slot is always listed, so a busy slot is never
+  // reported as free.
+  const includeInactive = parseBool(query.include_inactive, 'include_inactive', false);
   let people = employees;
   if (query.title) people = people.filter((e) => titleMatch(e, query.title));
+  const leftOut = includeInactive ? [] : people.filter((e) => e.inactive && !shifts.some((s) => s.employee_id === e.id && s.date === date));
+  if (leftOut.length) people = people.filter((e) => !leftOut.includes(e));
   const rows = people.map((e) => {
     const ev = evaluateShift({ shift: { employee_id: e.id, date, start_time: start, end_time: end, tentative: false }, employee: e, shifts, timeOffs: timeOff, settings, today });
     const reasons = [];
     if (ev.conflict) reasons.push({ code: 'ALREADY_WORKING', message: `Already works ${fmt12(ev.conflict.start_time)} to ${fmt12(ev.conflict.end_time)} that day.`, shift_id: ev.conflict.id });
     if (ev.time_off.length) reasons.push({ code: 'TIME_OFF', message: timeOffOut(ev.time_off[0]).label });
     if (ev.unavailable) reasons.push({ code: 'MARKED_UNAVAILABLE', message: `Marked unavailable ${fmt12(ev.unavailable.start_time)} to ${fmt12(ev.unavailable.end_time)} on ${ev.unavailable.day}s.` });
+    if (e.inactive) reasons.push({ code: 'INACTIVE', message: 'Marked inactive (hidden on the website dashboard).' });
     if (ev.hours_status.code === 'over_max') reasons.push({ code: 'WOULD_EXCEED_MAX', message: `Would reach ${round1(ev.weekly_hours_after)}h, over max ${e.max_hours}h.` });
     const status = ev.conflict ? 'busy' : reasons.length ? 'possible_with_warnings' : 'free';
     return {
@@ -280,6 +291,7 @@ export async function getAvailability(ctx) {
       max_hours: e.max_hours ?? null,
       min_hours: e.min_hours ?? null,
       food_safety_certified: !!e.food_safety_certified,
+      inactive: !!e.inactive,
     };
   });
   const rank = { free: 0, possible_with_warnings: 1, busy: 2 };
@@ -289,7 +301,7 @@ export async function getAvailability(ctx) {
   return {
     status: 200,
     action: 'availability.read',
-    message: `${dateLabel(date)}, ${fmt12(start)} to ${fmt12(end)}: ${free} of ${rows.length} people are free, ${maybe} could work with warnings, ${rows.length - free - maybe} are already working. Sorted with the fewest hours first.`,
+    message: `${dateLabel(date)}, ${fmt12(start)} to ${fmt12(end)}: ${free} of ${rows.length} people are free, ${maybe} could work with warnings, ${rows.length - free - maybe} are already working.${leftOut.length ? ` ${plural(leftOut.length, 'inactive employee')} left out (add include_inactive=true to see them).` : ''} Sorted with the fewest hours first.`,
     data: {
       slot: { date, start_time: start, end_time: end, hours: round1(shiftHours(start, end)), store_hours: storeHoursOut(settings, date) },
       employees: rows,
