@@ -76,9 +76,13 @@ export default function Dashboard() {
 
   const settings = storeSettings[0] || null;
 
-  const { data: rawEmployees = [], isLoading: loadingEmp } = useQuery({
-    queryKey: ["employees"],
-    queryFn: () => api.entities.Employee.list(),
+  // The dashboard asks the server for ACTIVE employees only (2026-11-16). An inactive employee is
+  // fetched separately, by id, only for a week where they still have a shift (see below), so that
+  // shift is never hidden. Both keys start with "employees", so every existing invalidation of
+  // ["employees"] refreshes them too.
+  const { data: activeEmployees = [], isLoading: loadingEmp } = useQuery({
+    queryKey: ["employees", "active"],
+    queryFn: () => api.entities.Employee.listActive(),
   });
 
   // Persist view state on change
@@ -120,18 +124,6 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeSettings]);
 
-  // Sort employees: custom order first, then new ones appended at the end
-  const orderedEmployees = (() => {
-    const base = [...rawEmployees].sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime());
-    if (!employeeOrder || employeeOrder.length === 0) return base;
-    const orderMap = {};
-    employeeOrder.forEach((id, i) => { orderMap[id] = i; });
-    return base.sort((a, b) => {
-      const ai = orderMap[a.id] ?? 9999;
-      const bi = orderMap[b.id] ?? 9999;
-      return ai - bi;
-    });
-  })();
 
   // Shifts load one month at a time (see src/lib/shiftMonths.js): the months around the week on
   // screen and around today. Moving into a month not loaded yet fetches it in the background while
@@ -161,19 +153,38 @@ export default function Dashboard() {
     queryFn: () => api.entities.TimeOff.list(),
   });
 
-  // Inactive employees (Employees page toggle, src/lib/employeeStatus.js) are hidden here, except
-  // when they still have a shift or time off in the week on screen: hiding them then would hide
-  // real shifts that could not be seen, edited or deleted.
-  const inactiveIds = inactiveIdsOf(settings, rawEmployees);
-  const employees = inactiveIds.size === 0 ? orderedEmployees : (() => {
-    const from = format(weekStart, "yyyy-MM-dd");
-    const to = format(addDays(weekStart, 6), "yyyy-MM-dd");
-    const busy = new Set([
-      ...shifts.filter((x) => x.date >= from && x.date <= to).map((x) => x.employee_id),
-      ...timeOffs.filter((t) => { const d = t.start_date || t.date; return d >= from && d <= to; }).map((t) => t.employee_id),
-    ]);
-    return orderedEmployees.filter((e) => !inactiveIds.has(e.id) || busy.has(e.id));
+  // Inactive employees with a shift in the week on screen: fetched by id so their shifts stay
+  // visible and editable. Time off does not count (regular days off repeat every week and would
+  // keep an inactive person on screen forever, the bug fixed 2026-11-16).
+  const weekFrom = format(weekStart, "yyyy-MM-dd");
+  const weekTo = format(addDays(weekStart, 6), "yyyy-MM-dd");
+  const activeIds = new Set(activeEmployees.map((e) => e.id));
+  const strayIds = [...new Set(shifts.filter((x) => x.date >= weekFrom && x.date <= weekTo && !activeIds.has(x.employee_id)).map((x) => x.employee_id))].sort();
+  const { data: strayEmployees = [] } = useQuery({
+    queryKey: ["employees", "byIds", strayIds.join(",")],
+    queryFn: () => api.entities.Employee.listByIds(strayIds),
+    enabled: strayIds.length > 0,
+  });
+  const rawEmployees = strayIds.length > 0 ? [...activeEmployees, ...strayEmployees.filter((e) => !activeIds.has(e.id))] : activeEmployees;
+
+  // Sort employees: custom order first, then new ones appended at the end
+  const orderedEmployees = (() => {
+    const base = [...rawEmployees].sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime());
+    if (!employeeOrder || employeeOrder.length === 0) return base;
+    const orderMap = {};
+    employeeOrder.forEach((id, i) => { orderMap[id] = i; });
+    return base.sort((a, b) => {
+      const ai = orderMap[a.id] ?? 9999;
+      const bi = orderMap[b.id] ?? 9999;
+      return ai - bi;
+    });
   })();
+
+  // Anyone still on the short lived settings list (before the column existed) is hidden too, unless
+  // they have a shift this week.
+  const inactiveIds = inactiveIdsOf(settings, rawEmployees);
+  const busyThisWeek = new Set(shifts.filter((x) => x.date >= weekFrom && x.date <= weekTo).map((x) => x.employee_id));
+  const employees = orderedEmployees.filter((e) => !inactiveIds.has(e.id) || busyThisWeek.has(e.id));
 
   const { data: events = [] } = useQuery({
     queryKey: ["events"],

@@ -47,6 +47,25 @@ export const supabaseApi = {
           .order('id'));
         return toAppRows(data);
       },
+      // Only employees not marked inactive: the dashboard asks for these, so inactive people are
+      // never even downloaded there (2026-11-16).
+      listActive: async () => {
+        const data = await fetchAll(() => supabase
+          .from('employees')
+          .select('*')
+          .eq('inactive', false)
+          .order('created_at', { ascending: true })
+          .order('id'));
+        return toAppRows(data);
+      },
+      // Specific employees by id (the dashboard uses it for an inactive employee who still has a
+      // shift in the week on screen, so that shift can be seen and edited).
+      listByIds: async (ids) => {
+        if (!ids || ids.length === 0) return [];
+        const { data, error } = await supabase.from('employees').select('*').in('id', ids);
+        if (error) throw error;
+        return toAppRows(data);
+      },
       create: async (payload) => {
         const user_id = await getUserId();
         const { data, error } = await supabase

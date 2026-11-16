@@ -616,3 +616,12 @@ Actions minutes a month).
   `inactive`. `base()` in `api/_lib/common.js` also treats ids on the legacy settings list as
   inactive until the website migrates them. Test: `node scripts/tests/api_inactive_unit.mjs`
   (13 checks, in memory fake database, no network).
+
+### 10. Dashboard downloads active employees only (2026-11-16)
+- Bug (Sohum): an inactive employee still showed in the day view. Cause: the dashboard kept an
+  inactive person visible in any week where they had a shift OR time off, and regular days off
+  repeat every week (copy previous week copies them), so they never disappeared.
+- Now the dashboard asks the server for active employees only (`Employee.listActive`, filter
+  `inactive = false`, key `["employees","active"]`). An inactive employee is fetched by id
+  (`Employee.listByIds`) only when they have a SHIFT in the week on screen, so that shift stays
+  visible and editable. Time off no longer counts. The Employees page still loads everyone.
