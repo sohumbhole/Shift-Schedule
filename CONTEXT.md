@@ -568,3 +568,7 @@ Actions minutes a month).
   timeline width. Resize drags get the real width too (`timelineWidth`, was `hours.length * colWidth`).
 - Browser checked at 1280, 1400 and 1920 wide: 10A, 11A, 5P, 9P labels within 1px of shift edges,
   grid and guide lines; drag still lands on the right hour.
+
+### 6. Rounded corners back on day view bars (2026-11-16)
+- Sohum preferred rounded corners after all. Bars and the drag ghost are `rounded-lg` again, still
+  full row height with no gap (`BAR_PAD` 0, `BAR_BLEED` 1). No shadow.

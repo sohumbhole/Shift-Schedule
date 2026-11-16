@@ -56,8 +56,8 @@ const ROW_MAX = 44;
 const ROW_MIN = 28;
 const COMPACT_BELOW = 40;
 const BAR_PAD = 0;
-// Shift bars fill the whole row height, square cornered, with no gap between rows (Sohum,
-// 2026-11-16: a blocky grid where the colors touch). BAR_BLEED pulls each bar over its row's
+// Shift bars fill the whole row height with no gap between rows, so the colors touch (Sohum,
+// 2026-11-16). Corners stay rounded (square corners were tried and reverted the same day). BAR_BLEED pulls each bar over its row's
 // 1px bottom border so bars in neighbouring rows meet. Time off pills keep a small inset.
 const BAR_BLEED = 1;
 const TIME_OFF_PAD = 3;
@@ -180,7 +180,7 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
 
   return (
     <div
-      className="absolute overflow-visible select-none"
+      className="absolute rounded-lg overflow-visible select-none"
       style={{
         top: BAR_PAD,
         bottom: BAR_PAD - BAR_BLEED,
@@ -218,7 +218,7 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
       onMouseLeave={() => { if (!dragging) setHoveredEdge(null); }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div style={{ ...edgeBase, left: 0, cursor: "ew-resize",
+      <div style={{ ...edgeBase, left: 0, borderRadius: "6px 0 0 6px", cursor: "ew-resize",
         background: hoveredEdge === "left" ? "rgba(255,255,255,0.3)" : "transparent",
         borderLeft: hoveredEdge === "left" ? "3px solid rgba(255,255,255,0.8)" : "none",
       }} />
@@ -231,7 +231,7 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
           {(durMins / 60) % 1 === 0 ? `${durMins / 60}h` : `${(durMins / 60).toFixed(1)}h`}
         </span>
       </div>
-      <div style={{ ...edgeBase, right: 0, left: "auto", cursor: "ew-resize",
+      <div style={{ ...edgeBase, right: 0, left: "auto", borderRadius: "0 6px 6px 0", cursor: "ew-resize",
         background: hoveredEdge === "right" ? "rgba(255,255,255,0.3)" : "transparent",
         borderRight: hoveredEdge === "right" ? "3px solid rgba(255,255,255,0.8)" : "none",
       }} />
@@ -245,7 +245,7 @@ function GhostShift({ ghostRef }) {
   return (
     <div
       ref={ghostRef}
-      className="fixed pointer-events-none shadow-xl flex items-center justify-between px-2.5 z-50"
+      className="fixed pointer-events-none rounded-lg shadow-xl flex items-center justify-between px-2.5 z-50"
       style={{ display: "none", opacity: 0.75 }}
     >
       <span className="ghost-label text-white text-sm font-semibold truncate" />
