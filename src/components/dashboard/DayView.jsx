@@ -55,7 +55,12 @@ const SIDEBAR_W = 160;
 const ROW_MAX = 44;
 const ROW_MIN = 28;
 const COMPACT_BELOW = 40;
-const BAR_PAD = 3;
+const BAR_PAD = 0;
+// Shift bars fill the whole row height, square cornered, with no gap between rows (Sohum,
+// 2026-11-16: a blocky grid where the colors touch). BAR_BLEED pulls each bar over its row's
+// 1px bottom border so bars in neighbouring rows meet. Time off pills keep a small inset.
+const BAR_BLEED = 1;
+const TIME_OFF_PAD = 3;
 
 function getHourRange(day, storeSettings) {
   const dayKey = DAY_KEYS[day.getDay()];
@@ -170,10 +175,10 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
 
   return (
     <div
-      className="absolute rounded-lg overflow-visible shadow-sm select-none"
+      className="absolute overflow-visible select-none"
       style={{
         top: BAR_PAD,
-        bottom: BAR_PAD,
+        bottom: BAR_PAD - BAR_BLEED,
         left: `${leftPct}%`,
         width: `${widthPct}%`,
         backgroundColor: isTentative ? "#fff" : color,
@@ -208,20 +213,20 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
       onMouseLeave={() => { if (!dragging) setHoveredEdge(null); }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div style={{ ...edgeBase, left: 0, borderRadius: "6px 0 0 6px", cursor: "ew-resize",
+      <div style={{ ...edgeBase, left: 0, cursor: "ew-resize",
         background: hoveredEdge === "left" ? "rgba(255,255,255,0.3)" : "transparent",
         borderLeft: hoveredEdge === "left" ? "3px solid rgba(255,255,255,0.8)" : "none",
       }} />
       <div className="absolute inset-0 flex items-center justify-between px-2.5 overflow-hidden pointer-events-none">
-        <span className={(isTentative ? "text-gray-900" : "text-white") + " text-xs font-semibold truncate"}>
+        <span className={(isTentative ? "text-gray-900" : "text-white") + " text-sm font-semibold truncate"}>
           {fmtTimeFull(displayStartTime)} to {fmtTimeFull(displayEndTime)}
-          <span className="opacity-75 font-normal ml-1.5">{emp.title}</span>
+          <span className="opacity-80 font-normal ml-1.5">{emp.title}</span>
         </span>
-        <span className={(isTentative ? "text-gray-500" : "text-white opacity-90") + " text-xs font-bold ml-2 shrink-0"}>
+        <span className={(isTentative ? "text-gray-500" : "text-white opacity-90") + " text-sm font-bold ml-2 shrink-0"}>
           {(durMins / 60) % 1 === 0 ? `${durMins / 60}h` : `${(durMins / 60).toFixed(1)}h`}
         </span>
       </div>
-      <div style={{ ...edgeBase, right: 0, left: "auto", borderRadius: "0 6px 6px 0", cursor: "ew-resize",
+      <div style={{ ...edgeBase, right: 0, left: "auto", cursor: "ew-resize",
         background: hoveredEdge === "right" ? "rgba(255,255,255,0.3)" : "transparent",
         borderRight: hoveredEdge === "right" ? "3px solid rgba(255,255,255,0.8)" : "none",
       }} />
@@ -235,12 +240,12 @@ function GhostShift({ ghostRef }) {
   return (
     <div
       ref={ghostRef}
-      className="fixed pointer-events-none rounded-lg shadow-xl flex items-center justify-between px-2.5 z-50"
+      className="fixed pointer-events-none shadow-xl flex items-center justify-between px-2.5 z-50"
       style={{ display: "none", opacity: 0.75 }}
     >
-      <span className="ghost-label text-white text-xs font-semibold truncate" />
+      <span className="ghost-label text-white text-sm font-semibold truncate" />
       <span className="ghost-copy-icon" style={{ display: "none" }}><Copy className="w-3 h-3 text-white opacity-80 ml-1 shrink-0" /></span>
-      <span className="ghost-duration text-white text-xs font-bold opacity-90 ml-2 shrink-0" />
+      <span className="ghost-duration text-white text-sm font-bold opacity-90 ml-2 shrink-0" />
     </div>
   );
 }
@@ -251,7 +256,7 @@ function updateGhostDOM(el, { ghostLeft, ghostTop, ghostWidth, rowHeight, color,
   el.style.left = `${ghostLeft}px`;
   el.style.top = `${ghostTop + BAR_PAD}px`;
   el.style.width = `${Math.max(ghostWidth, 80)}px`;
-  el.style.height = `${rowHeight - BAR_PAD * 2}px`;
+  el.style.height = `${rowHeight - BAR_PAD * 2}px`; // full row, like the bars
   el.style.backgroundColor = color;
   el.style.border = isCopy ? "2px dashed rgba(255,255,255,0.7)" : "2px solid rgba(255,255,255,0.4)";
   const label = el.querySelector(".ghost-label");
@@ -929,7 +934,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                         <div
                           key={to.id}
                           className="absolute rounded-md flex items-center px-2 cursor-pointer z-[2]"
-                          style={{ top: BAR_PAD, bottom: BAR_PAD, left: `${lp}%`, width: `${wp}%`, backgroundColor: cfg.bg, border: cfg.border }}
+                          style={{ top: TIME_OFF_PAD, bottom: TIME_OFF_PAD, left: `${lp}%`, width: `${wp}%`, backgroundColor: cfg.bg, border: cfg.border }}
                           onClick={(e) => { e.stopPropagation(); onEditTimeOff && onEditTimeOff(to); }}
                           title={to.reason ? `${cfg.label}: ${to.reason}` : cfg.label}
                         >

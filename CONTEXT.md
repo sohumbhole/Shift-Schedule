@@ -543,3 +543,10 @@ Actions minutes a month).
   decided against one). Week view untouched.
 - Measured in mock mode at 1400x900: 19 employees fit (28px rows), 8 employees get 41px rows, 3 get
   44px; drag and drop still lands on the right hour at every size.
+
+### 3. Day view shift bars: gapless, square, bigger text (2026-11-16)
+- Sohum: no space between rows so the colors touch, square corners instead of rounded pills, and
+  bigger text now that the bars are taller. Day view only; the week view keeps its rounded pills.
+- `DayView.jsx`: `BAR_PAD` is 0 and `BAR_BLEED` (1px) pulls each bar over its row's bottom border so
+  bars in neighbouring rows meet. Bars and the drag ghost lost `rounded-lg` and the bar shadow; times
+  and hours are `text-sm` (were `text-xs`). Time off pills keep a 3px inset (`TIME_OFF_PAD`).
