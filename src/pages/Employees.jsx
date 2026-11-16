@@ -9,7 +9,7 @@ import { createPageUrl } from "@/utils";
 import EmployeeCard from "../components/employees/EmployeeCard";
 import EmployeeModal from "../components/employees/EmployeeModal";
 import TimeOffModal from "../components/dashboard/TimeOffModal";
-import { inactiveIdsOf, setEmployeeInactive } from "@/lib/employeeStatus";
+import { inactiveIdsOf, moveToBottom, migrateLegacyInactive } from "@/lib/employeeStatus";
 
 export default function Employees() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -32,14 +32,20 @@ export default function Employees() {
     queryKey: ["storeSettings"],
     queryFn: () => api.entities.StoreSettings.list(),
   });
-  const inactiveIds = inactiveIdsOf(storeSettings[0]);
+  const inactiveIds = inactiveIdsOf(storeSettings[0], rawEmployees);
   const inactiveCount = employees.filter((e) => inactiveIds.has(e.id)).length;
 
-  const saveInactive = async (id, inactive) => {
-    if (inactive === inactiveIds.has(id)) return;
-    await setEmployeeInactive(id, inactive, rawEmployees);
-    queryClient.invalidateQueries({ queryKey: ["storeSettings"] });
-  };
+  // One time carry over from the short lived settings list to the real column (see employeeStatus).
+  const migratedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (migratedRef.current || isLoading || !storeSettings[0]?.metadata?.inactive_employee_ids) return;
+    migratedRef.current = true;
+    migrateLegacyInactive(rawEmployees).then((changed) => {
+      if (!changed) return;
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["storeSettings"] });
+    });
+  }, [isLoading, storeSettings, rawEmployees, queryClient]);
 
   // Auto-open modal when navigated here with ?edit=empId
   const autoOpenedRef = React.useRef(false);
@@ -54,10 +60,9 @@ export default function Employees() {
   }, [editEmpId, employees]);
 
   const createEmployee = useMutation({
-    mutationFn: ({ data }) => api.entities.Employee.create(data),
-    onSuccess: (created, { data: variables, inactive }) => {
+    mutationFn: (data) => api.entities.Employee.create(data),
+    onSuccess: (created, variables) => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
-      if (inactive) saveInactive(created.id, true);
       history.push({
         type: "ADD_EMPLOYEE",
         description: `Added employee: ${created.name}`,
@@ -113,12 +118,18 @@ export default function Employees() {
     });
   };
 
-  const handleSave = (data, inactive = false) => {
+  // `inactive` is a real employee column, saved with the rest of the employee. Switching someone
+  // back to active also moves them to the bottom of the dashboard order.
+  const handleSave = async (data, inactive = false) => {
     if (selectedEmployee) {
-      updateEmployee.mutate({ id: selectedEmployee.id, data });
-      saveInactive(selectedEmployee.id, inactive);
+      const wasInactive = inactiveIds.has(selectedEmployee.id);
+      await updateEmployee.mutateAsync({ id: selectedEmployee.id, data: { ...data, inactive } });
+      if (wasInactive && !inactive) {
+        await moveToBottom(selectedEmployee.id, rawEmployees);
+        queryClient.invalidateQueries({ queryKey: ["storeSettings"] });
+      }
     } else {
-      createEmployee.mutate({ data, inactive });
+      createEmployee.mutate({ ...data, inactive });
     }
   };
 

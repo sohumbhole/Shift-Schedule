@@ -129,6 +129,8 @@ export function employeeOut(e, displayOrder = null) {
     available_hours: e.available_hours || '',
     unavailable_hours: Array.isArray(e.unavailable_hours) ? e.unavailable_hours : [],
     food_safety_certified: !!e.food_safety_certified,
+    // Inactive employees are hidden on the website dashboard (Employees page switch, 2026-11-16).
+    inactive: !!e.inactive,
     notes: e.notes || '',
     display_order: displayOrder,
     created_at: e.created_at,

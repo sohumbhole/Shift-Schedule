@@ -151,12 +151,12 @@ export function buildOpenApi() {
       '/employees': {
         get: op('List employees', 'In website order, with weekly hours.', { parameters: [q('q', 'Name contains'), q('title', 'Title contains'), q('food_safety_certified', 'true or false'), q('week', 'Week for the hours (default this week)')] }),
         post: op('Add an employee', 'name, title and min_hours are required.', {
-          requestBody: body({ name: str(''), title: str(''), min_hours: { type: 'number' }, max_hours: { type: 'number' }, available_hours: str('Free text'), unavailable_hours: { type: 'array', items: { type: 'object', properties: { day: str('e.g. Saturday'), start_time: str(''), end_time: str('') } } }, food_safety_certified: bool(''), notes: str(''), color: str('Hex like #3B82F6'), ...DRY }, ['name', 'title', 'min_hours']),
+          requestBody: body({ name: str(''), title: str(''), min_hours: { type: 'number' }, max_hours: { type: 'number' }, available_hours: str('Free text'), unavailable_hours: { type: 'array', items: { type: 'object', properties: { day: str('e.g. Saturday'), start_time: str(''), end_time: str('') } } }, food_safety_certified: bool(''), inactive: bool('Hidden on the website dashboard'), notes: str(''), color: str('Hex like #3B82F6'), ...DRY }, ['name', 'title', 'min_hours']),
         }),
       },
       '/employees/{id}': {
         get: op('One employee', 'Id or name. With their week and upcoming time off.', { parameters: [p('id', 'Employee id or name'), q('week', 'Any date in the week')] }),
-        patch: op('Change an employee', 'Any employee field.', { parameters: [p('id', 'Employee id or name')], requestBody: body({ name: str(''), title: str(''), min_hours: { type: 'number' }, max_hours: { type: 'number' }, available_hours: str(''), unavailable_hours: { type: 'array', items: { type: 'object' } }, food_safety_certified: bool(''), notes: str(''), color: str(''), ...DRY }) }),
+        patch: op('Change an employee', 'Any employee field.', { parameters: [p('id', 'Employee id or name')], requestBody: body({ name: str(''), title: str(''), min_hours: { type: 'number' }, max_hours: { type: 'number' }, available_hours: str(''), unavailable_hours: { type: 'array', items: { type: 'object' } }, food_safety_certified: bool(''), inactive: bool('Hidden on the website dashboard'), notes: str(''), color: str(''), ...DRY }) }),
         delete: op('Delete an employee', 'Needs confirm=true. Also deletes their shifts and time off (undo restores them).', { parameters: [p('id', 'Employee id or name'), q('confirm', 'Must be true'), q('dry_run', 'true to preview')] }),
       },
       '/time-off': {

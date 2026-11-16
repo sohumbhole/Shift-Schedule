@@ -164,7 +164,7 @@ export default function Dashboard() {
   // Inactive employees (Employees page toggle, src/lib/employeeStatus.js) are hidden here, except
   // when they still have a shift or time off in the week on screen: hiding them then would hide
   // real shifts that could not be seen, edited or deleted.
-  const inactiveIds = inactiveIdsOf(settings);
+  const inactiveIds = inactiveIdsOf(settings, rawEmployees);
   const employees = inactiveIds.size === 0 ? orderedEmployees : (() => {
     const from = format(weekStart, "yyyy-MM-dd");
     const to = format(addDays(weekStart, 6), "yyyy-MM-dd");

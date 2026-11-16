@@ -248,7 +248,7 @@ per day), \`type\` (\`regular_off\` default, or \`custom_time_off\`), \`full_day
 **POST /employees**: \`name\`, \`title\` and \`min_hours\` are required (as on the website); optional
 \`max_hours\`, \`available_hours\` (free text), \`unavailable_hours\` (list of
 \`{"day": "Saturday", "start_time": "00:00", "end_time": "23:59"}\`), \`food_safety_certified\`,
-\`notes\`, \`color\`.
+\`inactive\` (true hides them on the website dashboard; they can still be scheduled), \`notes\`, \`color\`.
 **PATCH /employees/{id or name}**: change any of those fields.
 **DELETE /employees/{id or name}**: requires \`"confirm": true\`. Also deletes all their shifts and time
 off, like the website. Undo restores everything.
@@ -302,7 +302,7 @@ Undo and retries: \`ALREADY_UNDONE\`, \`CHANGED_SINCE\`, \`UNDO_NOT_POSSIBLE\`,
 Server: \`DATABASE_ERROR\`, \`INTERNAL_ERROR\` (safe to retry once; include \`meta.request_id\` when
 reporting).
 
-Warning codes: \`EMPLOYEE_UNAVAILABLE\`, \`TIME_OFF_THAT_DAY\`, \`OVER_MAX_HOURS\`, \`AT_MAX_HOURS\`,
+Warning codes: \`EMPLOYEE_UNAVAILABLE\`, \`EMPLOYEE_INACTIVE\`, \`TIME_OFF_THAT_DAY\`, \`OVER_MAX_HOURS\`, \`AT_MAX_HOURS\`,
 \`NO_STORE_HOURS\`, \`SHIFT_DURING_TIME_OFF\`, \`DUPLICATE_TIME_OFF\`, \`DUPLICATE_EMPLOYEE_NAME\`,
 \`PAST_DATE\`, \`PAST_DATES_IN_TARGET\`, \`SKIPPED_CONFLICT\`, \`COPIED_SHIFT_OUTSIDE_STORE_HOURS\`,
 \`SOME_SHIFTS_SKIPPED\`, \`EMPLOYEES_NOT_IN_ORDER\`, \`UNKNOWN_FIELD\`, \`ROWS_ALREADY_GONE\`,

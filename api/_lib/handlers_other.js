@@ -193,7 +193,7 @@ export async function deleteEvent(ctx) {
 }
 
 // ================= EMPLOYEES =================
-const EMPLOYEE_FIELDS = ['name', 'title', 'min_hours', 'max_hours', 'available_hours', 'unavailable_hours', 'food_safety_certified', 'notes', 'color', 'dry_run'];
+const EMPLOYEE_FIELDS = ['name', 'title', 'min_hours', 'max_hours', 'available_hours', 'unavailable_hours', 'food_safety_certified', 'inactive', 'notes', 'color', 'dry_run'];
 
 function parseUnavailable(v) {
   if (v === undefined) return undefined;
@@ -236,6 +236,7 @@ function employeeFields(b, existing) {
   const unav = parseUnavailable(b.unavailable_hours);
   if (unav !== undefined) out.unavailable_hours = unav;
   if (b.food_safety_certified !== undefined) out.food_safety_certified = parseBool(b.food_safety_certified, 'food_safety_certified');
+  if (b.inactive !== undefined) out.inactive = parseBool(b.inactive, 'inactive');
   if (b.notes !== undefined) out.notes = String(b.notes || '').slice(0, 2000);
   if (b.color !== undefined) out.color = parseColor(b.color);
   return out;

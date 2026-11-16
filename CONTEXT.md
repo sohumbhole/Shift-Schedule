@@ -598,3 +598,15 @@ Actions minutes a month).
 - The API (`/api/v1`) does not know about inactive yet: Muse still sees and can schedule everyone.
 - Browser checked in mock mode: first names, toggle saves and reloads, week notes kept, hidden on the
   dashboard, kept while they have a shift that week, reactivated employee goes to the bottom.
+
+### 9. Inactive moved to a real column (2026-11-16)
+- `employees.inactive boolean NOT NULL DEFAULT false` was added by Muse in the Supabase SQL editor
+  (26 employees before and after, 0 inactive; result note in the brain at
+  `handoffs/results/muse-employees-inactive-column-2026-11-16.md`). Existing table, so the
+  2026-10-30 Data API grant rule does not apply; verified live: selecting `inactive` returns 200.
+- The website now saves `inactive` with the employee row. `migrateLegacyInactive` (run once from
+  the Employees page) copies any ids from the short lived `metadata.inactive_employee_ids` list onto
+  the rows and removes the list; until then `inactiveIdsOf` honours both. Reactivating still moves
+  the person to the bottom of `employee_order` (`moveToBottom`).
+- API: employees have an `inactive` field (read, POST, PATCH), and a shift for an inactive employee
+  gets the warning `EMPLOYEE_INACTIVE` (not blocked). Docs updated in `apiDocs.js` and `openapi.js`.

@@ -46,6 +46,12 @@ export function checkShift({ shift, employee, shifts, timeOffs, settings, today,
       { hint: 'Set hours with PATCH /settings if that day should be checked.' }));
   }
 
+  if (employee?.inactive) {
+    warnings.push(problem('EMPLOYEE_INACTIVE',
+      `${employee.name} is marked inactive, so they are hidden on the website dashboard except in weeks where they have a shift.`,
+      { hint: 'This does not block the shift. If they are working again, PATCH /employees/{id} with "inactive": false.' }));
+  }
+
   if (ev.unavailable) {
     const b = ev.unavailable;
     warnings.push(problem('EMPLOYEE_UNAVAILABLE',
