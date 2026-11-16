@@ -625,3 +625,7 @@ Actions minutes a month).
   `inactive = false`, key `["employees","active"]`). An inactive employee is fetched by id
   (`Employee.listByIds`) only when they have a SHIFT in the week on screen, so that shift stays
   visible and editable. Time off no longer counts. The Employees page still loads everyone.
+- Same push: the day view timeline wrapper was `overflow-x-hidden`, which makes the vertical axis
+  `auto`; the bars' 1px bleed on the last row made it 1px taller than its box (126 vs 125) and showed
+  a stray scrollbar at the right edge. It is `overflow-hidden` now. The week view already uses the
+  same active only list (both views get `employees` from the Dashboard); confirmed in the browser.

@@ -758,7 +758,9 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
       />
 
       {/* Timeline */}
-      <div className="overflow-x-hidden">
+      {/* Clip both axes: shift bars and guide lines reach 1px below their row (BAR_BLEED) so rows
+          touch, which on the last row made this box 1px too tall and showed a stray scrollbar. */}
+      <div className="overflow-hidden">
         <div style={{ width: "100%" }}>
           {/* Hour header */}
           <div className="flex border-b border-gray-100 sticky top-0 bg-white z-10">
