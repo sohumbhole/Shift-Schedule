@@ -48,6 +48,14 @@ const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "frida
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const EDGE_HIT = 12;
 const SIDEBAR_W = 160;
+// Employee rows size themselves so every employee fits on one screen when possible: between
+// ROW_MIN and ROW_MAX pixels each (2026-11-16: was a fixed 52, which pushed 19 employees off the
+// screen). Rows under COMPACT_BELOW use a smaller avatar and tighter text. BAR_PAD is the gap
+// above and below each shift bar inside its row.
+const ROW_MAX = 44;
+const ROW_MIN = 28;
+const COMPACT_BELOW = 40;
+const BAR_PAD = 3;
 
 function getHourRange(day, storeSettings) {
   const dayKey = DAY_KEYS[day.getDay()];
@@ -162,8 +170,10 @@ function ShiftBar({ shift, emp, startHour, totalMinutes, timelineWidth, onSaveSh
 
   return (
     <div
-      className="absolute top-2 bottom-2 rounded-lg overflow-visible shadow-sm select-none"
+      className="absolute rounded-lg overflow-visible shadow-sm select-none"
       style={{
+        top: BAR_PAD,
+        bottom: BAR_PAD,
         left: `${leftPct}%`,
         width: `${widthPct}%`,
         backgroundColor: isTentative ? "#fff" : color,
@@ -239,9 +249,9 @@ function updateGhostDOM(el, { ghostLeft, ghostTop, ghostWidth, rowHeight, color,
   if (!el) return;
   el.style.display = "flex";
   el.style.left = `${ghostLeft}px`;
-  el.style.top = `${ghostTop + 4}px`;
+  el.style.top = `${ghostTop + BAR_PAD}px`;
   el.style.width = `${Math.max(ghostWidth, 80)}px`;
-  el.style.height = `${rowHeight - 8}px`;
+  el.style.height = `${rowHeight - BAR_PAD * 2}px`;
   el.style.backgroundColor = color;
   el.style.border = isCopy ? "2px dashed rgba(255,255,255,0.7)" : "2px solid rgba(255,255,255,0.4)";
   const label = el.querySelector(".ghost-label");
@@ -358,6 +368,30 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
   const colWidth = Math.max(28, Math.floor(timelineWidth / hours.length));
   const minsPerPx = totalMinutes / (hours.length * colWidth);
 
+  // Row height: share the space between the top of the rows and the bottom of the window among
+  // all employees, clamped to ROW_MIN to ROW_MAX. Recomputed on window resize and when the number
+  // of employees changes. The rows' top does not depend on the row height, so this never loops.
+  const rowsRef = useRef(null);
+  const [rowHeight, setRowHeight] = useState(ROW_MAX);
+  useEffect(() => {
+    const fit = () => {
+      const el = rowsRef.current;
+      const n = employees.length;
+      if (!el || n === 0) { setRowHeight(ROW_MAX); return; }
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      // 40px covers the card's bottom border and the page padding under it, measured at 33px.
+      const available = window.innerHeight - top - 40;
+      setRowHeight(Math.max(ROW_MIN, Math.min(ROW_MAX, Math.floor(available / n))));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [employees.length]);
+  const compact = rowHeight < COMPACT_BELOW;
+  const avatarClass = (compact ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs") + " rounded-full flex items-center justify-center text-white font-bold shrink-0";
+  const nameClass = (compact ? "text-xs leading-tight" : "text-sm") + " font-semibold text-gray-800 truncate";
+  const titleClass = (compact ? "text-[10px] leading-tight" : "text-xs") + " text-gray-400 truncate";
+
   // Called by ShiftBar when a "move" mousedown happens
   const handleStartMoveDrag = useCallback((e, shift, origEmp, grabOffsetMins) => {
     e.stopPropagation();
@@ -436,16 +470,16 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
       timelinePixelWidth,
       ghostWidthPx,
       origShiftLeftPx,
-      origRowTop: origRowRect ? origRowRect.top : e.clientY - 26,
-      origRowHeight: origRowRect ? origRowRect.height : 52,
+      origRowTop: origRowRect ? origRowRect.top : e.clientY - rowHeight / 2,
+      origRowHeight: origRowRect ? origRowRect.height : rowHeight,
     };
 
     const initialColor = origEmp.color || "#FF8C00";
     updateGhostDOM(ghostRef.current, {
       ghostLeft: origShiftLeftPx,
-      ghostTop: origRowRect ? origRowRect.top : e.clientY - 26,
+      ghostTop: origRowRect ? origRowRect.top : e.clientY - rowHeight / 2,
       ghostWidth: ghostWidthPx,
-      rowHeight: origRowRect ? origRowRect.height : 52,
+      rowHeight: origRowRect ? origRowRect.height : rowHeight,
       color: initialColor,
       isCopy,
       startTime: shift.start_time,
@@ -599,7 +633,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp, true);
     window.addEventListener("keydown", onKey);
-  }, [employees, dayShifts, minsPerPx, startHour, totalMinutes, hours.length, colWidth, onShiftDragSave, onShiftCopy, onEditShift]);
+  }, [employees, dayShifts, minsPerPx, startHour, totalMinutes, hours.length, colWidth, rowHeight, onShiftDragSave, onShiftCopy, onEditShift]);
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden" ref={containerRef}>
@@ -614,7 +648,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
       )}
 
       {/* Top nav bar */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-orange-50/40">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-orange-50/40">
         <div className="flex items-center gap-3">
           {/* Fixed-width nav so the right arrow never shifts */}
           <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
@@ -714,17 +748,18 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
         <div style={{ width: "100%" }}>
           {/* Hour header */}
           <div className="flex border-b border-gray-100 sticky top-0 bg-white z-10">
-            <div className="shrink-0 border-r border-gray-100 px-3 py-2 flex items-end" style={{ width: SIDEBAR_W }}>
+            <div className="shrink-0 border-r border-gray-100 px-3 py-1.5 flex items-end" style={{ width: SIDEBAR_W }}>
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Employees</span>
             </div>
             {hours.map((h) => (
-              <div key={h} className="border-r border-gray-50 last:border-r-0 py-2 text-center flex-shrink-0" style={{ width: colWidth }}>
+              <div key={h} className="border-r border-gray-50 last:border-r-0 py-1.5 text-center flex-shrink-0" style={{ width: colWidth }}>
                 <span className="text-xs font-semibold text-gray-400">{fmtHourLabel(h)}</span>
               </div>
             ))}
           </div>
 
           {/* Employee rows */}
+          <div ref={rowsRef}>
           {employees.length === 0 ? (
             <div className="flex items-center justify-center py-20 text-gray-300 text-sm">No employees yet</div>
           ) : isReorderMode ? (
@@ -756,16 +791,16 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
                               className={`flex border-b border-gray-200 last:border-b-0 transition-colors ${snapshot.isDragging ? "bg-orange-50/80 shadow-lg border border-orange-200" : "hover:bg-gray-50/20"}`}
-                              style={{ height: 52, ...provided.draggableProps.style }}
+                              style={{ height: rowHeight, ...provided.draggableProps.style }}
                             >
                               <div className="shrink-0 border-r border-gray-100 px-3 flex items-center gap-2.5 relative" style={{ width: SIDEBAR_W }}>
                                 <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500 shrink-0 -ml-1 cursor-grab" />
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: emp.color || "#FF8C00" }}>
+                                <div className={avatarClass} style={{ backgroundColor: emp.color || "#FF8C00" }}>
                                   {emp.name.charAt(0)}
                                 </div>
-                                <div className="overflow-hidden min-w-0" style={{ width: SIDEBAR_W - 80 }}>
-                                  <div className="text-sm font-semibold text-gray-800 truncate">{emp.name}</div>
-                                  <div className="text-xs text-gray-400 truncate">{emp.title?.length > 9 ? emp.title.slice(0, 9) + "…" : emp.title}</div>
+                                <div className="overflow-hidden min-w-0" style={{ width: SIDEBAR_W - (compact ? 72 : 80) }}>
+                                  <div className={nameClass}>{emp.name}</div>
+                                  <div className={titleClass}>{emp.title?.length > 9 ? emp.title.slice(0, 9) + "…" : emp.title}</div>
                                 </div>
                               </div>
                               <div className="flex-1 flex items-center px-3">
@@ -818,13 +853,13 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                   key={emp.id}
                   id={`dayview-row-${emp.id}`}
                   className={`flex border-b border-gray-200 last:border-b-0 transition-colors ${isHoverTarget ? "bg-orange-50/60" : "hover:bg-gray-50/20"}`}
-                  style={{ height: 52 }}
+                  style={{ height: rowHeight }}
                 >
                   {/* Sidebar */}
                   <div className="shrink-0 border-r border-gray-100 px-3 flex items-center gap-2.5 group/sidebar relative" style={{ width: SIDEBAR_W }}>
                     <div className="relative">
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                        className={avatarClass}
                         style={{ backgroundColor: emp.color || "#FF8C00" }}
                       >
                         {emp.name.charAt(0)}
@@ -836,12 +871,12 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                       )}
                     </div>
                     <EmployeeTooltip emp={emp}>
-                      <div className="overflow-hidden min-w-0" style={{ width: SIDEBAR_W - 68 }}>
+                      <div className="overflow-hidden min-w-0" style={{ width: SIDEBAR_W - (compact ? 60 : 68) }}>
                         <button
                           onClick={(e) => { e.stopPropagation(); navigate(createPageUrl(`Employees?edit=${emp.id}`)); }}
-                          className="text-sm font-semibold text-gray-800 truncate hover:text-orange-600 transition-colors block cursor-pointer text-left w-full"
+                          className={nameClass + " hover:text-orange-600 transition-colors block cursor-pointer text-left w-full"}
                         >{emp.name}</button>
-                        <div className="text-xs text-gray-400 truncate">
+                        <div className={titleClass}>
                           {emp.title?.length > 9 ? emp.title.slice(0, 9) + "…" : emp.title}{empHours > 0 ? ` · ${empHours % 1 === 0 ? empHours : empHours.toFixed(1)}h` : ""}
                         </div>
                       </div>
@@ -893,8 +928,8 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                       return (
                         <div
                           key={to.id}
-                          className="absolute top-1 bottom-1 rounded-md flex items-center px-2 cursor-pointer z-[2]"
-                          style={{ left: `${lp}%`, width: `${wp}%`, backgroundColor: cfg.bg, border: cfg.border }}
+                          className="absolute rounded-md flex items-center px-2 cursor-pointer z-[2]"
+                          style={{ top: BAR_PAD, bottom: BAR_PAD, left: `${lp}%`, width: `${wp}%`, backgroundColor: cfg.bg, border: cfg.border }}
                           onClick={(e) => { e.stopPropagation(); onEditTimeOff && onEditTimeOff(to); }}
                           title={to.reason ? `${cfg.label}: ${to.reason}` : cfg.label}
                         >
@@ -942,7 +977,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                     ))}
 
                     {empShifts.length === 0 && (
-                      <div className="absolute inset-2 opacity-0 group-hover:opacity-100 transition-opacity border-2 border-dashed border-orange-200 rounded-lg flex items-center justify-center gap-1 text-orange-400 text-xs font-medium">
+                      <div className="absolute inset-1 opacity-0 group-hover:opacity-100 transition-opacity border-2 border-dashed border-orange-200 rounded-lg flex items-center justify-center gap-1 text-orange-400 text-xs font-medium">
                         <Plus className="w-3 h-3" /> Add shift
                       </div>
                     )}
@@ -951,6 +986,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
               );
             })
           )}
+          </div>
         </div>
       </div>
 

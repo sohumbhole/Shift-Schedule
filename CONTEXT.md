@@ -531,3 +531,15 @@ Actions minutes a month).
   shift window says "on Friday (the next morning)".
 - Test: `node scripts/tests/unavailability_rules.mjs` (20 checks, no network). Browser checked in
   mock mode: overlay spans midnight to 3 AM on the Thursday row, tooltip and warning as above.
+
+### 2. Condensed day view (separate commit, so it can be reverted on its own)
+- Sohum: with 19 employees the day view ran off the screen and the shift bars had too much white
+  space above and below. Employee rows were a fixed 52px; bars had 8px top and bottom.
+- Now in `DayView.jsx`: rows share the space between the top of the rows and the bottom of the
+  window, clamped to 28 to 44px each (`ROW_MIN`, `ROW_MAX`), recomputed on resize and when the
+  employee count changes. Rows under 40px (`COMPACT_BELOW`) use a 24px avatar and smaller text. Bars
+  and time off pills sit 3px (`BAR_PAD`) from the row edges. The ghost bar while dragging uses the
+  same numbers. Hour header and the day header bar lost a little padding too. No toggle (Sohum
+  decided against one). Week view untouched.
+- Measured in mock mode at 1400x900: 19 employees fit (28px rows), 8 employees get 41px rows, 3 get
+  44px; drag and drop still lands on the right hour at every size.
