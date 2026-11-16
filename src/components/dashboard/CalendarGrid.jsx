@@ -6,6 +6,7 @@ import EventsRow from "@/components/events/EventsRow";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
+import { getStoreHoursFor, shiftSpan, MINUTES_PER_DAY } from "@/lib/shiftRules";
 
 function timeToMinutes(t) {
   const [h, m] = t.split(":").map(Number);
@@ -61,7 +62,7 @@ function TimeOffPill({ timeOff, onClick }) {
   );
 }
 
-export default function CalendarGrid({ weekStart, shifts, timeOffs = [], events = [], employees, onAddShift, onEditShift, onEditTimeOff, onAddTimeOff, onSelectDay, onAddEvent, onEditEvent, isReorderMode, onReorder }) {
+export default function CalendarGrid({ weekStart, shifts, timeOffs = [], events = [], employees, storeSettings = null, onAddShift, onEditShift, onEditTimeOff, onAddTimeOff, onSelectDay, onAddEvent, onEditEvent, isReorderMode, onReorder }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const navigate = useNavigate();
   const [expandedCell, setExpandedCell] = useState(null);
@@ -161,12 +162,25 @@ export default function CalendarGrid({ weekStart, shifts, timeOffs = [], events 
         {days.map((day) => {
           const content = CellContent({ day });
           const dayName = DAY_NAMES[day.getDay()];
-          const dayUnavail = (emp.unavailable_hours || []).filter((b) => b.day === dayName);
-          const hasUnavail = dayUnavail.length > 0;
+          const allBlocks = emp.unavailable_hours || [];
+          const dayUnavail = allBlocks.filter((b) => b.day === dayName);
+          // When the store closes after midnight, this day's business night runs into the next
+          // weekday, so a block there that starts before closing (Friday 12 AM to 3 AM for a
+          // Thursday that closes at 5 AM) belongs to this cell too.
+          const storeHours = getStoreHoursFor(storeSettings, format(day, "yyyy-MM-dd"));
+          const closeAbs = storeHours && storeHours.closes_next_day ? timeToMinutes(storeHours.close) + MINUTES_PER_DAY : null;
+          const nextDayName = DAY_NAMES[(day.getDay() + 1) % 7];
+          const nightUnavail = closeAbs === null ? [] : allBlocks.filter((b) =>
+            b.day === nextDayName && shiftSpan(b.start_time, b.end_time).start + MINUTES_PER_DAY < closeAbs);
+          const hasUnavail = dayUnavail.length > 0 || nightUnavail.length > 0;
           const isAllDayUnavail = dayUnavail.some((b) => (b.start_time || "") <= "00:00" && (b.end_time || "") >= "23:59");
+          const unavailParts = [
+            ...dayUnavail.map((b) => `${fmtTime(b.start_time)}-${fmtTime(b.end_time)}`),
+            ...nightUnavail.map((b) => `${nextDayName.slice(0, 3)} ${fmtTime(b.start_time)}-${fmtTime(b.end_time)}`),
+          ];
           const unavailTitle = !hasUnavail ? "" : isAllDayUnavail
             ? `${emp.name} is unavailable all day`
-            : `${emp.name} unavailable ${dayUnavail.map((b) => `${fmtTime(b.start_time)}-${fmtTime(b.end_time)}`).join(", ")}`;
+            : `${emp.name} unavailable ${unavailParts.join(", ")}`;
           return (
             <div
               key={day.toISOString()}

@@ -97,7 +97,9 @@ A shift is **refused** when:
   asks "Are you sure?" for past days).
 
 A shift is **allowed with a warning** when:
-- \`EMPLOYEE_UNAVAILABLE\`: the employee is marked unavailable then.
+- \`EMPLOYEE_UNAVAILABLE\`: the employee is marked unavailable then. A shift that runs past midnight is
+  also checked against the next weekday's blocks (a Thursday 9 PM to 3 AM shift meets a Friday 12 AM
+  to 3 AM block); the warning names the block's own weekday.
 - \`TIME_OFF_THAT_DAY\`: the employee has time off that day.
 - \`OVER_MAX_HOURS\` / \`AT_MAX_HOURS\`: it takes them over, or to, their weekly max.
 - \`NO_STORE_HOURS\`: that weekday has no store hours set, so hours were not checked.

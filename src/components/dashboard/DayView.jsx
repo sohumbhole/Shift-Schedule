@@ -7,6 +7,7 @@ import EventsRow from "@/components/events/EventsRow";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
+import { unavailabilityAround } from "@/lib/shiftRules";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function timeToMinutes(t) {
@@ -904,13 +905,11 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                       );
                     })}
 
-                    {/* Unavailable overlays */}
-                    {(emp.unavailable_hours || [])
-                      .filter((block) => block.day === DAY_NAMES[day.getDay()])
-                      .map((block, i) => {
-                        const bStart = timeToMinutes(block.start_time);
-                        let bEnd = timeToMinutes(block.end_time);
-                        if (bEnd <= bStart) bEnd += 24 * 60;
+                    {/* Unavailable overlays. The timeline of an overnight store runs past midnight,
+                        so blocks from the NEXT weekday (Friday 12 AM to 3 AM on the Thursday view)
+                        are drawn too; unavailabilityAround puts them on this day's clock. */}
+                    {unavailabilityAround(emp, format(day, "yyyy-MM-dd"))
+                      .map(({ start: bStart, end: bEnd }, i) => {
                         const rangeStart = startHour * 60;
                         const rangeEnd = startHour * 60 + totalMinutes;
                         const clampedStart = Math.max(bStart, rangeStart);

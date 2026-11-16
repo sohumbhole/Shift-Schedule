@@ -759,6 +759,7 @@ export default function Dashboard() {
        timeOffs={timeOffs}
        events={events}
        employees={employees}
+       storeSettings={settings}
        onAddShift={handleAddShift}
        onEditShift={handleEditShift}
        onEditTimeOff={handleEditTimeOff}

@@ -511,3 +511,23 @@ Actions minutes a month).
   (`/api/v1`) is untouched.
 - Test: `scripts/tests/month_loading_browser.mjs` (browser, mock mode, 20 checks: request counts,
   slow loading, reload on an old week, Today, copy and clear across a month boundary, delete, undo).
+
+## Session: 2026-11-16 (unavailability across midnight; condensed day view)
+### 1. Unavailability on the next weekday was ignored for overnight shifts
+- Bug (Sohum): a cook marked unavailable Friday 12 AM to 3 AM could be put on Thursday 9 PM to 3 AM
+  with no warning, and the Thursday day view (which runs to 5 AM) showed no hatch after midnight.
+  `findUnavailability` only looked at blocks on the shift's own weekday, so anything past midnight was
+  compared against Thursday blocks only.
+- Fix in `src/lib/shiftRules.js`: new `unavailabilityAround(employee, date)` returns the blocks of the
+  date's weekday, the next weekday moved forward 24 hours, and the previous weekday moved back 24
+  hours (for a block that itself crosses midnight), all on the date's own clock. `findUnavailability`
+  uses it, so the add shift window and the API (`EMPLOYEE_UNAVAILABLE` warning, availability
+  endpoint) are fixed together. Same day blocks are still checked first, so answers for shifts that do
+  not cross midnight are unchanged (rules_equivalence would only differ on overnight cases, which is
+  the intended change).
+- Day view draws the next day's blocks in the after midnight part of the timeline. Week view: when
+  the store closes after midnight, a next day block that starts before closing is added to the cell
+  (hatch, Ban icon, tooltip "Fri 12a-3a"); CalendarGrid now takes `storeSettings` for that. The add
+  shift window says "on Friday (the next morning)".
+- Test: `node scripts/tests/unavailability_rules.mjs` (20 checks, no network). Browser checked in
+  mock mode: overlay spans midnight to 3 AM on the Thursday row, tooltip and warning as above.

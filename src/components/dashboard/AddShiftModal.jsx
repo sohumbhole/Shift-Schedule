@@ -246,7 +246,6 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
   // Check if shift overlaps with employee's unavailable hours
   let unavailableWarning = null;
   if (selectedEmp && shiftDateStr) {
-    const dayName = dayNameOf(shiftDateStr);
     const conflict = findUnavailability(selectedEmp, shiftDateStr, startTime, endTime);
 
     if (conflict) {
@@ -255,7 +254,10 @@ export default function AddShiftModal({ open, onClose, date, employees, shifts, 
         const ampm = h >= 12 ? "PM" : "AM";
         return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
       };
-      unavailableWarning = `${selectedEmp.name} is marked unavailable ${fmt(conflict.start_time)} - ${fmt(conflict.end_time)} on ${dayName}.`;
+      // conflict.day is the block's own weekday: for a shift that runs past midnight it can be the
+      // next day (Thursday 9 PM to 3 AM meets a Friday 12 AM to 3 AM block).
+      const which = conflict.day === dayNameOf(shiftDateStr) ? conflict.day : `${conflict.day} (the next morning)`;
+      unavailableWarning = `${selectedEmp.name} is marked unavailable ${fmt(conflict.start_time)} - ${fmt(conflict.end_time)} on ${which}.`;
     }
   }
 

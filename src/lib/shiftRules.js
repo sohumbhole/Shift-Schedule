@@ -129,17 +129,39 @@ export function findShiftConflict(employeeId, dateStr, start, end, shifts, ignor
   }) || null;
 }
 
-// First unavailable block on that weekday that overlaps the given times, or null.
-export function findUnavailability(employee, dateStr, start, end) {
+// Every unavailable block that can touch a shift dated dateStr, placed on that date's clock
+// (minutes from midnight of dateStr, like shiftSpan). Three weekdays matter, in this order:
+//   - the date's own weekday (offset 0);
+//   - the NEXT weekday, moved forward 24 hours: a Thursday shift that runs past midnight lands in
+//     Friday's early blocks (for example a cook marked unavailable Friday 12 AM to 3 AM);
+//   - the PREVIOUS weekday, moved back 24 hours: a block that itself crosses midnight (Wednesday
+//     10 PM to 2 AM) reaches into Thursday's first hours.
+// Returns [{ block, start, end }]. Shifts that never cross midnight can only meet offset 0 blocks,
+// so the old same day behavior is unchanged for them.
+export function unavailabilityAround(employee, dateStr) {
   const blocks = employee && Array.isArray(employee.unavailable_hours) ? employee.unavailable_hours : [];
-  if (blocks.length === 0) return null;
-  const dayName = dayNameOf(dateStr);
+  if (blocks.length === 0) return [];
+  const idx = dayIndexOf(dateStr);
+  const out = [];
+  for (const [delta, offset] of [[0, 0], [1, MINUTES_PER_DAY], [-1, -MINUTES_PER_DAY]]) {
+    const name = DAY_NAMES[(idx + delta + 7) % 7];
+    for (const block of blocks) {
+      if (block.day !== name) continue;
+      const { start, end } = shiftSpan(block.start_time, block.end_time);
+      out.push({ block, start: start + offset, end: end + offset });
+    }
+  }
+  return out;
+}
+
+// First unavailable block that overlaps the given times on that date, or null. Looks at the
+// date's weekday and, for shifts that cross midnight, at the next weekday too (see
+// unavailabilityAround). The returned block keeps its own `day`, so a Thursday 9 PM to 3 AM shift
+// reports the Friday 12 AM to 3 AM block as "Friday".
+export function findUnavailability(employee, dateStr, start, end) {
   const { start: a, end: b } = shiftSpan(start, end);
-  return blocks.find((block) => {
-    if (block.day !== dayName) return false;
-    const { start: bStart, end: bEnd } = shiftSpan(block.start_time, block.end_time);
-    return a < bEnd && b > bStart;
-  }) || null;
+  const hit = unavailabilityAround(employee, dateStr).find((u) => a < u.end && b > u.start);
+  return hit ? hit.block : null;
 }
 
 // Time off entries for the employee on that date that overlap the shift (full day entries always do).
