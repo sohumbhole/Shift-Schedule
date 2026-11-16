@@ -9,6 +9,7 @@ import { createPageUrl } from "@/utils";
 import EmployeeCard from "../components/employees/EmployeeCard";
 import EmployeeModal from "../components/employees/EmployeeModal";
 import TimeOffModal from "../components/dashboard/TimeOffModal";
+import { inactiveIdsOf, setEmployeeInactive } from "@/lib/employeeStatus";
 
 export default function Employees() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -27,6 +28,18 @@ export default function Employees() {
     queryFn: () => api.entities.Employee.list(),
   });
   const employees = [...rawEmployees].sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+  const { data: storeSettings = [] } = useQuery({
+    queryKey: ["storeSettings"],
+    queryFn: () => api.entities.StoreSettings.list(),
+  });
+  const inactiveIds = inactiveIdsOf(storeSettings[0]);
+  const inactiveCount = employees.filter((e) => inactiveIds.has(e.id)).length;
+
+  const saveInactive = async (id, inactive) => {
+    if (inactive === inactiveIds.has(id)) return;
+    await setEmployeeInactive(id, inactive, rawEmployees);
+    queryClient.invalidateQueries({ queryKey: ["storeSettings"] });
+  };
 
   // Auto-open modal when navigated here with ?edit=empId
   const autoOpenedRef = React.useRef(false);
@@ -41,9 +54,10 @@ export default function Employees() {
   }, [editEmpId, employees]);
 
   const createEmployee = useMutation({
-    mutationFn: (data) => api.entities.Employee.create(data),
-    onSuccess: (created, variables) => {
+    mutationFn: ({ data }) => api.entities.Employee.create(data),
+    onSuccess: (created, { data: variables, inactive }) => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
+      if (inactive) saveInactive(created.id, true);
       history.push({
         type: "ADD_EMPLOYEE",
         description: `Added employee: ${created.name}`,
@@ -99,11 +113,12 @@ export default function Employees() {
     });
   };
 
-  const handleSave = (data) => {
+  const handleSave = (data, inactive = false) => {
     if (selectedEmployee) {
       updateEmployee.mutate({ id: selectedEmployee.id, data });
+      saveInactive(selectedEmployee.id, inactive);
     } else {
-      createEmployee.mutate(data);
+      createEmployee.mutate({ data, inactive });
     }
   };
 
@@ -154,7 +169,7 @@ export default function Employees() {
             Employees
           </h1>
           <p className="text-sm text-gray-400 mt-1">
-            {employees.length} team member{employees.length !== 1 ? "s" : ""}
+            {employees.length} team member{employees.length !== 1 ? "s" : ""}{inactiveCount > 0 ? ` (${inactiveCount} inactive, hidden on the dashboard)` : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -188,7 +203,7 @@ export default function Employees() {
       ) : (
         <div id="employee-list" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {employees.map((emp) => (
-            <EmployeeCard key={emp.id} employee={emp} onClick={handleCardClick} onAddTimeOff={handleAddTimeOffForEmp} />
+            <EmployeeCard key={emp.id} employee={emp} inactive={inactiveIds.has(emp.id)} onClick={handleCardClick} onAddTimeOff={handleAddTimeOffForEmp} />
           ))}
         </div>
       )}
@@ -200,6 +215,7 @@ export default function Employees() {
           setSelectedEmployee(null);
         }}
         employee={selectedEmployee}
+        isInactive={!!selectedEmployee && inactiveIds.has(selectedEmployee.id)}
         onSave={handleSave}
         onDelete={handleDeleteEmployee}
       />

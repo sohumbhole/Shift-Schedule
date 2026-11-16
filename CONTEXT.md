@@ -580,3 +580,21 @@ Actions minutes a month).
   14px), darker. Title and the day's hours share one small line under it, with the food safety Award
   icon inline (it used to sit on the avatar). The full title shows now (was cut at 9 characters).
   Reorder mode uses the same stripe. Row heights unchanged (28px with 19 employees at 1400x900).
+
+### 8. First names on the dashboard; inactive employees (2026-11-16)
+- Day view and week view show only the first word of the name ("Preeti Sharma" shows "Preeti");
+  hovering shows the full name. `firstName()` in `src/lib/employeeStatus.js`. Exports, the add shift
+  dropdown and the Employees page keep full names.
+- Inactive toggle in the employee window, on the Available Hours row, right aligned. Stored as
+  `store_settings.metadata.inactive_employee_ids` (no database column: no schema change, the API
+  merges metadata so Muse cannot erase it, the employee row is untouched). Saved after re-reading
+  the settings row, like week notes.
+- Dashboard (week and day view, exports, add shift list) hides inactive employees, EXCEPT when they
+  still have a shift or time off in the week on screen, so no real shift is ever hidden.
+- Turning someone active again removes them from `employee_order`, which puts them at the bottom
+  (unordered employees go last); if no order was ever saved, one is created oldest first.
+- Employees page: blue "Inactive" tag next to "Certified", card greyed (opacity, desaturated), and the
+  subtitle counts inactive people. They still appear there so they can be switched back.
+- The API (`/api/v1`) does not know about inactive yet: Muse still sees and can schedule everyone.
+- Browser checked in mock mode: first names, toggle saves and reloads, week notes kept, hidden on the
+  dashboard, kept while they have a shift that week, reactivated employee goes to the bottom.

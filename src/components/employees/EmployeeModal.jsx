@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Trash2, Plus, X, Ribbon } from "lucide-react";
 
 const COLOR_OPTIONS = [
@@ -86,7 +87,7 @@ function UnavailableRow({ block, onChange, onRemove }) {
   );
 }
 
-export default function EmployeeModal({ open, onClose, employee, onSave, onDelete }) {
+export default function EmployeeModal({ open, onClose, employee, isInactive = false, onSave, onDelete }) {
   const [form, setForm] = useState({
     name: "", title: "", available_hours: "",
     min_hours: "", max_hours: "", notes: "",
@@ -95,6 +96,8 @@ export default function EmployeeModal({ open, onClose, employee, onSave, onDelet
   });
   const [unavailable, setUnavailable] = useState([]);
   const [touched, setTouched] = useState({});
+  // Inactive is not an employee column: the parent saves it separately (src/lib/employeeStatus.js).
+  const [inactive, setInactive] = useState(false);
 
   useEffect(() => {
     if (employee) {
@@ -119,7 +122,8 @@ export default function EmployeeModal({ open, onClose, employee, onSave, onDelet
       setUnavailable([]);
     }
     setTouched({});
-  }, [employee, open]);
+    setInactive(!!employee && isInactive);
+  }, [employee, open, isInactive]);
 
   const addUnavailable = () => {
     setUnavailable([...unavailable, { day: "Monday", start_time: "09:00", end_time: "17:00" }]);
@@ -144,7 +148,7 @@ export default function EmployeeModal({ open, onClose, employee, onSave, onDelet
       max_hours: form.max_hours ? Number(form.max_hours) : undefined,
       unavailable_hours: unavailable,
       food_safety_certified: form.food_safety_certified,
-    });
+    }, inactive);
     onClose();
   };
 
@@ -181,7 +185,13 @@ export default function EmployeeModal({ open, onClose, employee, onSave, onDelet
           </div>
 
           <div className="space-y-2">
-            <Label>Available Hours</Label>
+            <div className="flex items-center justify-between">
+              <Label>Available Hours</Label>
+              <label htmlFor="employee_inactive" className="flex items-center gap-2 cursor-pointer" title="Inactive employees are hidden from the dashboard">
+                <span className={"text-sm font-medium " + (inactive ? "text-blue-600" : "text-gray-500")}>Inactive</span>
+                <Switch id="employee_inactive" checked={inactive} onCheckedChange={setInactive} />
+              </label>
+            </div>
             <Input value={form.available_hours} onChange={(e) => setForm({ ...form, available_hours: e.target.value })} placeholder="e.g., Mon-Fri 9am-5pm" />
           </div>
 

@@ -7,6 +7,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { getStoreHoursFor, shiftSpan, MINUTES_PER_DAY } from "@/lib/shiftRules";
+import { firstName } from "@/lib/employeeStatus";
 
 function timeToMinutes(t) {
   const [h, m] = t.split(":").map(Number);
@@ -149,7 +150,7 @@ export default function CalendarGrid({ weekStart, shifts, timeOffs = [], events 
               <button
                 onClick={(e) => { e.stopPropagation(); navigate(createPageUrl(`Employees?edit=${emp.id}`)); }}
                 className="text-sm font-semibold text-gray-800 truncate hover:text-orange-600 transition-colors block cursor-pointer text-left w-full"
-              >{emp.name.split(" ")[0]}</button>
+              >{firstName(emp.name)}</button>
               <div className="text-xs text-gray-400 truncate">{emp.title?.length > 9 ? emp.title.slice(0, 9) + "…" : emp.title}</div>
             </div>
           </EmployeeTooltip>

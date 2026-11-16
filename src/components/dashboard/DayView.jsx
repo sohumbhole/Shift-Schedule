@@ -8,6 +8,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { unavailabilityAround } from "@/lib/shiftRules";
+import { firstName } from "@/lib/employeeStatus";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function timeToMinutes(t) {
@@ -822,7 +823,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                                 <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: emp.color || "#FF8C00" }} />
                                 <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500 shrink-0 cursor-grab" />
                                 <div className="overflow-hidden min-w-0 flex-1">
-                                  <div className={nameClass}>{emp.name}</div>
+                                  <div className={nameClass} title={emp.name}>{firstName(emp.name)}</div>
                                   <div className={titleClass}>{emp.title?.length > 9 ? emp.title.slice(0, 9) + "…" : emp.title}</div>
                                 </div>
                               </div>
@@ -888,7 +889,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                           onClick={(e) => { e.stopPropagation(); navigate(createPageUrl(`Employees?edit=${emp.id}`)); }}
                           className={nameClass + " hover:text-orange-600 transition-colors block cursor-pointer text-left w-full"}
                           title={emp.name}
-                        >{emp.name}</button>
+                        >{firstName(emp.name)}</button>
                         <div className={titleClass + " flex items-center gap-1"}>
                           {emp.food_safety_certified && <Award className="w-2.5 h-2.5 text-green-600 shrink-0" title="Food safety certified" />}
                           <span className="truncate">{emp.title}{empHours > 0 ? ` · ${empHours % 1 === 0 ? empHours : empHours.toFixed(1)}h` : ""}</span>

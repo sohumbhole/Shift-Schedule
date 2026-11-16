@@ -5,6 +5,7 @@ import { startOfWeek, addWeeks, subWeeks, addDays, format, subDays, isSameDay } 
 import { useUndoHistory } from "@/lib/undoHistory";
 import { neededShiftMonths, useShiftMonths, monthsBetween, ensureShiftsBetween, refreshShiftMonths } from "@/lib/shiftMonths";
 import { useDashboardNav } from "@/lib/dashboardNav";
+import { inactiveIdsOf } from "@/lib/employeeStatus";
 import WeekNav from "../components/dashboard/WeekNav";
 import CalendarGrid from "../components/dashboard/CalendarGrid";
 import DayView from "../components/dashboard/DayView";
@@ -120,7 +121,7 @@ export default function Dashboard() {
   }, [storeSettings]);
 
   // Sort employees: custom order first, then new ones appended at the end
-  const employees = (() => {
+  const orderedEmployees = (() => {
     const base = [...rawEmployees].sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime());
     if (!employeeOrder || employeeOrder.length === 0) return base;
     const orderMap = {};
@@ -159,6 +160,20 @@ export default function Dashboard() {
     queryKey: ["timeOffs"],
     queryFn: () => api.entities.TimeOff.list(),
   });
+
+  // Inactive employees (Employees page toggle, src/lib/employeeStatus.js) are hidden here, except
+  // when they still have a shift or time off in the week on screen: hiding them then would hide
+  // real shifts that could not be seen, edited or deleted.
+  const inactiveIds = inactiveIdsOf(settings);
+  const employees = inactiveIds.size === 0 ? orderedEmployees : (() => {
+    const from = format(weekStart, "yyyy-MM-dd");
+    const to = format(addDays(weekStart, 6), "yyyy-MM-dd");
+    const busy = new Set([
+      ...shifts.filter((x) => x.date >= from && x.date <= to).map((x) => x.employee_id),
+      ...timeOffs.filter((t) => { const d = t.start_date || t.date; return d >= from && d <= to; }).map((t) => t.employee_id),
+    ]);
+    return orderedEmployees.filter((e) => !inactiveIds.has(e.id) || busy.has(e.id));
+  })();
 
   const { data: events = [] } = useQuery({
     queryKey: ["events"],

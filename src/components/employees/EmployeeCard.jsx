@@ -2,13 +2,14 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import { Clock, FileText, CalendarOff, Award } from "lucide-react";
 
-export default function EmployeeCard({ employee, onClick, onAddTimeOff }) {
+export default function EmployeeCard({ employee, inactive = false, onClick, onAddTimeOff }) {
   const color = employee.color || "#FF8C00";
 
   return (
     <Card
       onClick={() => onClick(employee)}
-      className="p-4 cursor-pointer hover:shadow-md transition-all duration-200 border-gray-100 hover:border-gray-200 group"
+      className={"p-4 cursor-pointer hover:shadow-md transition-all duration-200 border-gray-100 hover:border-gray-200 group " +
+        (inactive ? "bg-gray-50 opacity-60 saturate-50 hover:opacity-90" : "")}
     >
       <div className="flex items-start gap-3.5">
         <div
@@ -22,6 +23,11 @@ export default function EmployeeCard({ employee, onClick, onAddTimeOff }) {
             <h3 className="font-semibold text-gray-900 truncate group-hover:text-orange-600 transition-colors">
               {employee.name}
             </h3>
+            {inactive && (
+              <div className="flex items-center gap-1 shrink-0 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                <span className="text-xs font-semibold text-blue-600">Inactive</span>
+              </div>
+            )}
             {employee.food_safety_certified && (
               <div className="flex items-center gap-1 shrink-0 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
                 <Award className="w-3 h-3 text-green-600" />
