@@ -65,6 +65,7 @@ const TIME_OFF_PAD = 3;
 // against these times at a glance (Sohum, 2026-11-16). Hours on the 24 hour clock.
 const GUIDE_HOURS = [11, 17, 21];
 const GUIDE_COLOR = "rgba(17, 24, 39, 0.35)";
+const GUIDE_WIDTH = 1;
 
 function getHourRange(day, storeSettings) {
   const dayKey = DAY_KEYS[day.getDay()];
@@ -760,11 +761,23 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
             <div className="shrink-0 border-r border-gray-100 px-3 py-1.5 flex items-end" style={{ width: SIDEBAR_W }}>
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Employees</span>
             </div>
-            {hours.map((h) => (
-              <div key={h} className="border-r border-gray-50 last:border-r-0 py-1.5 text-center flex-shrink-0" style={{ width: colWidth }}>
-                <span className="text-xs font-semibold text-gray-400">{fmtHourLabel(h)}</span>
-              </div>
-            ))}
+            {/* Hour labels sit centered on the exact spot where that hour starts in the rows below,
+                using the same minute math as the shift bars and guide lines (2026-11-16: they used to
+                sit in the middle of fixed width cells, a little right of the real time). The last
+                label (closing time) is right aligned so it is not cut off. */}
+            <div className="relative flex-1 py-1.5">
+              <span className="text-xs font-semibold invisible">0</span>
+              {hours.map((h, i) => (
+                <span
+                  key={h}
+                  className="absolute top-1/2 text-xs font-semibold text-gray-400 whitespace-nowrap"
+                  style={{
+                    left: `${((i * 60) / totalMinutes) * 100}%`,
+                    transform: `translate(${i === hours.length - 1 ? "-100%" : "-50%"}, -50%)`,
+                  }}
+                >{fmtHourLabel(h)}</span>
+              ))}
+            </div>
           </div>
 
           {/* Employee rows */}
@@ -917,9 +930,18 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                       onAddShift(day, emp, defaultStart);
                     }}
                   >
-                    {hours.map((h, i) => (
-                      <div key={h} data-hour-col={i} className="absolute top-0 bottom-0 border-r border-gray-50" style={{ left: i * colWidth, width: colWidth }} />
-                    ))}
+                    {/* Hour grid: one column per hour, placed with the same percentages as the bars,
+                        so the faint grid, the labels and the shifts all agree. The last one is a zero
+                        width marker at closing time; the drag code reads the first and last of these
+                        to learn the timeline's pixel span. */}
+                    {hours.map((h, i) => {
+                      const last = i === hours.length - 1;
+                      return (
+                        <div key={h} data-hour-col={i} className={"absolute top-0 bottom-0 " + (last ? "" : "border-r border-gray-50")} style={{
+                          left: `${((i * 60) / totalMinutes) * 100}%`, width: last ? 0 : `${(60 / totalMinutes) * 100}%`,
+                        }} />
+                      );
+                    })}
 
                     {/* Time Off overlays */}
                     {empTimeOffs.map((to) => {
@@ -970,14 +992,15 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                         );
                       })}
 
-                    {/* Guide lines at GUIDE_HOURS, drawn over the bars but never catching clicks */}
+                    {/* Guide lines at GUIDE_HOURS: behind shifts, time off and day off pills (zIndex 0, after the
+                        unavailable hatch so they still show over it), never catching clicks */}
                     {GUIDE_HOURS.map((h) => {
                       const mins = h * 60 - startHour * 60;
                       if (mins <= 0 || mins >= totalMinutes) return null;
                       return (
                         <div key={`guide-${h}`} className="absolute pointer-events-none" style={{
-                          left: `${(mins / totalMinutes) * 100}%`, top: 0, bottom: -1, width: 2,
-                          marginLeft: -1, backgroundColor: GUIDE_COLOR, zIndex: 5,
+                          left: `${(mins / totalMinutes) * 100}%`, top: 0, bottom: -1, width: GUIDE_WIDTH,
+                          marginLeft: -GUIDE_WIDTH / 2, backgroundColor: GUIDE_COLOR, zIndex: 0,
                         }} />
                       );
                     })}
@@ -990,7 +1013,7 @@ export default function DayView({ day, shifts, timeOffs = [], events = [], emplo
                         emp={emp}
                         startHour={startHour}
                         totalMinutes={totalMinutes}
-                        timelineWidth={hours.length * colWidth}
+                        timelineWidth={timelineWidth}
                         onSaveShift={onShiftDragSave}
                         onEditShift={onEditShift}
                         onStartMoveDrag={handleStartMoveDrag}

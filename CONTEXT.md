@@ -556,3 +556,15 @@ Actions minutes a month).
   read against those times. `GUIDE_HOURS` and `GUIDE_COLOR` (dark at 35% opacity, 2px) in
   `DayView.jsx`. Drawn over the bars with the same minute math as the bars, so they line up with
   shift edges exactly; they ignore clicks and drags. Skipped when a time is outside that day's timeline.
+
+### 5. Guide lines behind, hour labels aligned (2026-11-16)
+- Guide lines are 1px (`GUIDE_WIDTH`) and sit at zIndex 0: over the unavailable hatch, under shift
+  bars, time off and day off pills.
+- Hour labels were centered in fixed `colWidth` cells, while bars are placed by minutes over the full
+  timeline width with one hour fewer, so labels drifted right of the real time (most visible mid day).
+  Labels are now absolutely placed at the same percentage as the bars and centered on that point; the
+  closing hour label is right aligned so it is not cut off. The faint hour grid uses the same
+  percentages, and its zero width last marker makes the drag code's measured span equal the real
+  timeline width. Resize drags get the real width too (`timelineWidth`, was `hours.length * colWidth`).
+- Browser checked at 1280, 1400 and 1920 wide: 10A, 11A, 5P, 9P labels within 1px of shift edges,
+  grid and guide lines; drag still lands on the right hour.
